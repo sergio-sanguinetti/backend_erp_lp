@@ -1,0 +1,487 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Usuario {
+  id                     String                   @id @default(uuid())
+  nombres                String                   @db.VarChar(255)
+  apellidoPaterno        String                   @db.VarChar(255)
+  apellidoMaterno        String                   @db.VarChar(255)
+  email                  String                   @unique @db.VarChar(255)
+  password               String                   @db.VarChar(255)
+  telefono               String?                  @db.VarChar(50)
+  rol                    Rol                      @default(repartidor)
+  tipoRepartidor         TipoRepartidor?          @map("tipo_repartidor")
+  estado                 Estado                   @default(activo)
+  sede                   String?                  @db.VarChar(255)
+  twoFactorSecret        String?                  @db.VarChar(255)
+  isTwoFactorEnabled     Boolean                  @default(false)
+  fechaRegistro          DateTime                 @default(now())
+  createdAt              DateTime                 @default(now()) @map("created_at")
+  updatedAt              DateTime                 @updatedAt @map("updated_at")
+  rutas                  UsuarioRuta[]
+  pedidos                Pedido[]
+  historialLimiteCredito HistorialLimiteCredito[]
+
+  @@map("usuarios")
+}
+
+enum Rol {
+  superAdministrador
+  administrador
+  gestor
+  repartidor
+}
+
+enum Estado {
+  activo
+  inactivo
+}
+
+enum TipoRepartidor {
+  cilindros
+  pipas
+}
+
+model Sede {
+  id              String          @id @default(uuid())
+  nombre          String          @db.VarChar(255)
+  direccion       String          @db.VarChar(500)
+  telefono        String          @db.VarChar(50)
+  email           String          @db.VarChar(255)
+  estado          EstadoSede      @default(activa)
+  fechaCreacion   DateTime        @default(now()) @map("fecha_creacion")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  formasPago      FormaPago[]
+  formasPagoSedes FormaPagoSede[]
+  productos       Producto[]
+  pedidos         Pedido[]
+
+  @@map("sedes")
+}
+
+enum EstadoSede {
+  activa
+  inactiva
+}
+
+model FormaPago {
+  id                  String          @id @default(uuid())
+  nombre              String          @db.VarChar(255)
+  tipo                TipoFormaPago
+  descripcion         String          @db.VarChar(500)
+  activa              Boolean         @default(true)
+  requiereValidacion  Boolean         @default(false)
+  requiereFolio       Boolean         @default(false)
+  comisionPorcentaje  Float           @default(0)
+  diasLiquidacion     Int             @default(0)
+  bancoAsociado       String?         @db.VarChar(255)
+  requiereComprobante Boolean         @default(false)
+  permiteCambio       Boolean         @default(true)
+  limiteMaximo        Float?
+  limiteMinimo        Float?
+  sedeId              String?         @map("sede_id")
+  sede                Sede?           @relation(fields: [sedeId], references: [id], onDelete: SetNull)
+  sedes               FormaPagoSede[]
+  pagosFormaPago      PagoFormaPago[]
+  usuarioCreacion     String          @db.VarChar(255)
+  usuarioModificacion String          @db.VarChar(255)
+  fechaCreacion       DateTime        @default(now()) @map("fecha_creacion")
+  fechaModificacion   DateTime        @updatedAt @map("fecha_modificacion")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+
+  @@map("formas_pago")
+}
+
+model FormaPagoSede {
+  id          String    @id @default(uuid())
+  formaPagoId String    @map("forma_pago_id")
+  formaPago   FormaPago @relation(fields: [formaPagoId], references: [id], onDelete: Cascade)
+  sedeId      String    @map("sede_id")
+  sede        Sede      @relation(fields: [sedeId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@unique([formaPagoId, sedeId])
+  @@map("formas_pago_sedes")
+}
+
+enum TipoFormaPago {
+  efectivo
+  terminal
+  transferencia
+  cheque
+  deposito
+  credito
+}
+
+model Ruta {
+  id                  String        @id @default(uuid())
+  nombre              String        @db.VarChar(255)
+  codigo              String        @unique @db.VarChar(50)
+  descripcion         String?       @db.VarChar(500)
+  zona                String        @db.VarChar(100)
+  zonaId              String?       @map("zona_id")
+  zonaRelacion        Zona?         @relation(fields: [zonaId], references: [id], onDelete: SetNull)
+  activa              Boolean       @default(true)
+  horarioInicio       String?       @db.VarChar(10)
+  horarioFin          String?       @db.VarChar(10)
+  usuarioCreacion     String        @db.VarChar(255)
+  usuarioModificacion String        @db.VarChar(255)
+  fechaCreacion       DateTime      @default(now()) @map("fecha_creacion")
+  fechaModificacion   DateTime      @updatedAt @map("fecha_modificacion")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+  repartidores        UsuarioRuta[]
+  clientes            Cliente[]
+  pedidos             Pedido[]
+
+  @@map("rutas")
+}
+
+model UsuarioRuta {
+  id        String  @id @default(uuid())
+  rutaId    String  @map("ruta_id")
+  usuarioId String  @map("usuario_id")
+  ruta      Ruta    @relation(fields: [rutaId], references: [id], onDelete: Cascade)
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([rutaId, usuarioId])
+  @@map("usuario_ruta")
+}
+
+model Ciudad {
+  id            String      @id @default(uuid())
+  nombre        String?     @db.VarChar(255)
+  codigo        String?     @db.VarChar(50)
+  estado        String      @db.VarChar(100)
+  activa        Boolean     @default(true)
+  fechaCreacion DateTime    @default(now()) @map("fecha_creacion")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  municipios    Municipio[]
+
+  @@map("ciudades")
+}
+
+model Municipio {
+  id            String   @id @default(uuid())
+  nombre        String   @db.VarChar(255)
+  codigo        String?  @db.VarChar(50)
+  ciudadId      String   @map("ciudad_id")
+  ciudad        Ciudad   @relation(fields: [ciudadId], references: [id], onDelete: Cascade)
+  activo        Boolean  @default(true)
+  fechaCreacion DateTime @default(now()) @map("fecha_creacion")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  zonas         Zona[]
+
+  @@map("municipios")
+}
+
+model Zona {
+  id            String    @id @default(uuid())
+  nombre        String    @db.VarChar(255)
+  codigo        String?   @db.VarChar(50)
+  descripcion   String?   @db.VarChar(500)
+  municipioId   String    @map("municipio_id")
+  municipio     Municipio @relation(fields: [municipioId], references: [id], onDelete: Cascade)
+  activa        Boolean   @default(true)
+  fechaCreacion DateTime  @default(now()) @map("fecha_creacion")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  rutas         Ruta[]
+
+  @@map("zonas")
+}
+
+enum EstadoCliente {
+  activo
+  suspendido
+  inactivo
+}
+
+enum TipoDomicilio {
+  principal
+  facturacion
+  entrega
+  otro
+}
+
+model Cliente {
+  id                         String                   @id @default(uuid())
+  nombre                     String                   @db.VarChar(255)
+  apellidoPaterno            String                   @db.VarChar(255)
+  apellidoMaterno            String                   @db.VarChar(255)
+  email                      String                   @unique @db.VarChar(255)
+  telefono                   String                   @db.VarChar(50)
+  telefonoSecundario         String?                  @db.VarChar(50)
+  calle                      String                   @db.VarChar(255)
+  numeroExterior             String                   @db.VarChar(20)
+  numeroInterior             String?                  @db.VarChar(20)
+  colonia                    String                   @db.VarChar(255)
+  municipio                  String                   @db.VarChar(255)
+  estado                     String                   @db.VarChar(100)
+  codigoPostal               String                   @db.VarChar(10)
+  rfc                        String?                  @db.VarChar(20)
+  curp                       String?                  @db.VarChar(20)
+  rutaId                     String?                  @map("ruta_id")
+  ruta                       Ruta?                    @relation(fields: [rutaId], references: [id], onDelete: SetNull)
+  limiteCredito              Float                    @default(0)
+  saldoActual                Float                    @default(0)
+  pagosEspecialesAutorizados Boolean                  @default(false)
+  estadoCliente              EstadoCliente            @default(activo)
+  fechaRegistro              DateTime                 @default(now()) @map("fecha_registro")
+  ultimaModificacion         DateTime                 @updatedAt @map("ultima_modificacion")
+  createdAt                  DateTime                 @default(now()) @map("created_at")
+  updatedAt                  DateTime                 @updatedAt @map("updated_at")
+  domicilios                 Domicilio[]
+  pedidos                    Pedido[]
+  notasCredito               NotaCredito[]
+  pagos                      Pago[]
+  historialLimiteCredito     HistorialLimiteCredito[]
+
+  @@map("clientes")
+}
+
+model Domicilio {
+  id              String        @id @default(uuid())
+  clienteId       String        @map("cliente_id")
+  cliente         Cliente       @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  tipo            TipoDomicilio
+  calle           String        @db.VarChar(255)
+  numeroExterior  String        @db.VarChar(20)
+  numeroInterior  String?       @db.VarChar(20)
+  colonia         String        @db.VarChar(255)
+  municipio       String        @db.VarChar(255)
+  estado          String        @db.VarChar(100)
+  codigoPostal    String        @db.VarChar(10)
+  referencia      String?       @db.VarChar(500)
+  activo          Boolean       @default(true)
+  codigoQR        String        @unique @db.VarChar(50)
+  fechaCreacionQR DateTime      @default(now()) @map("fecha_creacion_qr")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  @@map("domicilios")
+}
+
+enum CategoriaProducto {
+  gas_lp
+  cilindros
+  tanques_nuevos
+}
+
+model Producto {
+  id                String            @id @default(uuid())
+  nombre            String            @db.VarChar(255)
+  categoria         CategoriaProducto
+  precio            Float
+  unidad            String            @db.VarChar(50)
+  descripcion       String?           @db.VarChar(500)
+  activo            Boolean           @default(true)
+  sedeId            String?           @map("sede_id")
+  sede              Sede?             @relation(fields: [sedeId], references: [id], onDelete: SetNull)
+  fechaCreacion     DateTime          @default(now()) @map("fecha_creacion")
+  fechaModificacion DateTime          @updatedAt @map("fecha_modificacion")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  pedidosProducto   PedidoProducto[]
+
+  @@map("productos")
+}
+
+enum EstadoPedido {
+  entregado
+  pendiente
+  cancelado
+  en_proceso
+}
+
+enum TipoServicio {
+  pipas
+  cilindros
+}
+
+model Pedido {
+  id                String       @id @default(uuid())
+  numeroPedido      String       @unique @db.VarChar(50)
+  clienteId         String       @map("cliente_id")
+  cliente           Cliente      @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  rutaId            String?      @map("ruta_id")
+  ruta              Ruta?        @relation(fields: [rutaId], references: [id], onDelete: SetNull)
+  fechaPedido       DateTime     @map("fecha_pedido")
+  horaPedido        String       @map("hora_pedido") @db.VarChar(10)
+  estado            EstadoPedido @default(pendiente)
+  cantidadProductos Int          @default(0) @map("cantidad_productos")
+  ventaTotal        Float        @default(0) @map("venta_total")
+  tipoServicio      TipoServicio @map("tipo_servicio")
+  repartidorId      String?      @map("repartidor_id")
+  repartidor        Usuario?     @relation(fields: [repartidorId], references: [id], onDelete: SetNull)
+  observaciones     String?      @db.VarChar(1000)
+  sedeId            String?      @map("sede_id")
+  sede              Sede?        @relation(fields: [sedeId], references: [id], onDelete: SetNull)
+  fechaCreacion     DateTime     @default(now()) @map("fecha_creacion")
+  fechaModificacion DateTime     @updatedAt @map("fecha_modificacion")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  productosPedido PedidoProducto[]
+  notasCredito    NotaCredito[]
+
+  @@map("pedidos")
+}
+
+model PedidoProducto {
+  id         String   @id @default(uuid())
+  pedidoId   String   @map("pedido_id")
+  pedido     Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  productoId String   @map("producto_id")
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  cantidad   Int
+  precio     Float
+  subtotal   Float
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("pedido_productos")
+}
+
+enum EstadoNotaCredito {
+  vigente
+  por_vencer
+  vencida
+  pagada
+  cancelada
+}
+
+model NotaCredito {
+  id                String            @id @default(uuid())
+  numeroNota        String            @unique @map("numero_nota") @db.VarChar(50)
+  clienteId         String            @map("cliente_id")
+  cliente           Cliente           @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  pedidoId          String?           @map("pedido_id")
+  pedido            Pedido?           @relation(fields: [pedidoId], references: [id], onDelete: SetNull)
+  fechaVenta        DateTime          @map("fecha_venta")
+  fechaVencimiento  DateTime          @map("fecha_vencimiento")
+  importe           Float
+  saldoPendiente    Float             @default(0) @map("saldo_pendiente")
+  diasVencimiento   Int               @default(0) @map("dias_vencimiento")
+  estado            EstadoNotaCredito @default(vigente)
+  observaciones     String?           @db.VarChar(1000)
+  fechaCreacion     DateTime          @default(now()) @map("fecha_creacion")
+  fechaModificacion DateTime          @updatedAt @map("fecha_modificacion")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  pagos             Pago[]
+
+  @@map("notas_credito")
+}
+
+enum EstadoPago {
+  pendiente
+  autorizado
+  rechazado
+  cancelado
+}
+
+enum TipoPago {
+  nota_especifica
+  abono_general
+}
+
+model Pago {
+  id                  String          @id @default(uuid())
+  clienteId           String          @map("cliente_id")
+  cliente             Cliente         @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  notaCreditoId       String?         @map("nota_credito_id")
+  notaCredito         NotaCredito?    @relation(fields: [notaCreditoId], references: [id], onDelete: SetNull)
+  montoTotal          Float           @map("monto_total")
+  tipo                TipoPago
+  fechaPago           DateTime        @map("fecha_pago")
+  horaPago            String          @map("hora_pago") @db.VarChar(10)
+  observaciones       String?         @db.VarChar(1000)
+  usuarioRegistro     String          @map("usuario_registro")
+  usuarioAutorizacion String?         @map("usuario_autorizacion")
+  estado              EstadoPago      @default(pendiente)
+  fechaCreacion       DateTime        @default(now()) @map("fecha_creacion")
+  fechaModificacion   DateTime        @updatedAt @map("fecha_modificacion")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+  formasPago          PagoFormaPago[]
+
+  @@map("pagos")
+}
+
+model PagoFormaPago {
+  id          String    @id @default(uuid())
+  pagoId      String    @map("pago_id")
+  pago        Pago      @relation(fields: [pagoId], references: [id], onDelete: Cascade)
+  formaPagoId String    @map("forma_pago_id")
+  formaPago   FormaPago @relation(fields: [formaPagoId], references: [id], onDelete: Cascade)
+  monto       Float
+  referencia  String?   @db.VarChar(255)
+  banco       String?   @db.VarChar(255)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("pago_forma_pago")
+}
+
+model HistorialLimiteCredito {
+  id             String   @id @default(uuid())
+  clienteId      String   @map("cliente_id")
+  cliente        Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  usuarioId      String   @map("usuario_id")
+  usuario        Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  limiteAnterior Float    @map("limite_anterior")
+  limiteNuevo    Float    @map("limite_nuevo")
+  motivo         String   @db.VarChar(500)
+  fechaCreacion  DateTime @default(now()) @map("fecha_creacion")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("historial_limite_credito")
+}
+
+enum TipoNewsletterItem {
+  image
+  notification
+}
+
+enum TamañoNewsletter {
+  small
+  medium
+  large
+}
+
+model NewsletterItem {
+  id                  String             @id @default(uuid())
+  type                TipoNewsletterItem
+  title               String?            @db.VarChar(255)
+  content             String?            @db.Text
+  description         String?            @db.VarChar(500)
+  imageUrl            String?            @db.Text
+  fechaVencimiento    DateTime?          @map("fecha_vencimiento")
+  size                TamañoNewsletter? @default(medium)
+  activo              Boolean            @default(true)
+  usuarioCreacion     String?            @map("usuario_creacion")
+  usuarioModificacion String?            @map("usuario_modificacion")
+  fechaCreacion       DateTime           @default(now()) @map("fecha_creacion")
+  fechaModificacion   DateTime           @updatedAt @map("fecha_modificacion")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+
+  @@map("newsletter_items")
+}
