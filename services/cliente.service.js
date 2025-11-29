@@ -11,10 +11,15 @@ const generarCodigoQR = (clienteId, index) => {
 }
 
 exports.createCliente = async (clienteData) => {
-    // Verificar si el email ya existe (solo si el email no está vacío)
-    if (clienteData.email && clienteData.email.trim() !== '') {
+    // Normalizar email: convertir strings vacíos, undefined, o null a null
+    const emailNormalizado = clienteData.email && typeof clienteData.email === 'string' && clienteData.email.trim() !== ''
+        ? clienteData.email.trim().toLowerCase()
+        : null;
+
+    // Verificar si el email ya existe (solo si el email no está vacío/null)
+    if (emailNormalizado) {
         const existingCliente = await prisma.cliente.findUnique({
-            where: { email: clienteData.email.toLowerCase() }
+            where: { email: emailNormalizado }
         });
         
         if (existingCliente) {
@@ -30,18 +35,18 @@ exports.createCliente = async (clienteData) => {
             nombre: clienteData.nombre,
             apellidoPaterno: clienteData.apellidoPaterno,
             apellidoMaterno: clienteData.apellidoMaterno,
-            email: (clienteData.email && clienteData.email.trim() !== '') ? clienteData.email.toLowerCase() : null,
-            telefono: clienteData.telefono,
-            telefonoSecundario: clienteData.telefonoSecundario || null,
+            email: emailNormalizado, // null si está vacío o no se proporciona
+            telefono: clienteData.telefono || '',
+            telefonoSecundario: (clienteData.telefonoSecundario && clienteData.telefonoSecundario.trim() !== '') ? clienteData.telefonoSecundario : null,
             calle: clienteData.calle,
             numeroExterior: clienteData.numeroExterior,
-            numeroInterior: clienteData.numeroInterior || null,
-            colonia: clienteData.colonia,
-            municipio: clienteData.municipio,
-            estado: clienteData.estado,
-            codigoPostal: clienteData.codigoPostal,
-            rfc: clienteData.rfc || null,
-            curp: clienteData.curp || null,
+            numeroInterior: (clienteData.numeroInterior && clienteData.numeroInterior.trim() !== '') ? clienteData.numeroInterior : null,
+            colonia: clienteData.colonia || '',
+            municipio: clienteData.municipio || '',
+            estado: clienteData.estado || '',
+            codigoPostal: clienteData.codigoPostal || '',
+            rfc: (clienteData.rfc && clienteData.rfc.trim() !== '') ? clienteData.rfc : null,
+            curp: (clienteData.curp && clienteData.curp.trim() !== '') ? clienteData.curp : null,
             rutaId: clienteData.rutaId || null,
             limiteCredito: clienteData.limiteCredito || 0,
             saldoActual: clienteData.saldoActual || 0,
@@ -77,23 +82,43 @@ exports.createCliente = async (clienteData) => {
     }
 
     // Recargar el cliente con los domicilios
-    return await prisma.cliente.findUnique({
+    const clienteCompleto = await prisma.cliente.findUnique({
         where: { id: nuevoCliente.id },
         include: {
             ruta: true,
             domicilios: true
         }
     });
+
+    // Normalizar email null a string vacío para compatibilidad con el frontend
+    if (clienteCompleto) {
+        return {
+            ...clienteCompleto,
+            email: clienteCompleto.email ?? ''
+        };
+    }
+
+    return clienteCompleto;
 };
 
 exports.findClienteById = async (id) => {
-    return await prisma.cliente.findUnique({
+    const cliente = await prisma.cliente.findUnique({
         where: { id },
         include: {
             ruta: true,
             domicilios: true
         }
     });
+
+    // Normalizar email null a string vacío para compatibilidad con el frontend
+    if (cliente) {
+        return {
+            ...cliente,
+            email: cliente.email ?? ''
+        };
+    }
+
+    return cliente;
 };
 
 exports.getAllClientes = async (filtros = {}) => {
@@ -119,37 +144,85 @@ exports.getAllClientes = async (filtros = {}) => {
         where.rutaId = filtros.rutaId;
     }
 
-    return await prisma.cliente.findMany({
-        where,
-        include: {
-            ruta: true,
-            domicilios: {
-                where: { activo: true }
-            }
-        },
-        orderBy: { fechaRegistro: 'desc' }
-    });
+    // Manejar el caso donde email puede ser null en la BD pero el schema espera String
+    try {
+        const clientes = await prisma.cliente.findMany({
+            where,
+            include: {
+                ruta: true,
+                domicilios: {
+                    where: { activo: true }
+                }
+            },
+            orderBy: { fechaRegistro: 'desc' }
+        });
+        
+        // Normalizar emails null a string vacío si es necesario (para compatibilidad)
+        return clientes.map(cliente => ({
+            ...cliente,
+            email: cliente.email ?? ''
+        }));
+    } catch (error) {
+        // Si el error es por email null, el schema necesita ser actualizado
+        if (error.message && error.message.includes('email') && error.message.includes('null')) {
+            console.error('Error: El campo email tiene valores null en la BD pero el schema espera String no nullable.');
+            console.error('Solución: Actualiza los registros en la BD o cambia el schema para permitir email nullable (String?)');
+            throw new Error('Error de compatibilidad: El campo email tiene valores null. Por favor, actualiza la base de datos o regenera el cliente de Prisma.');
+        }
+        throw error;
+    }
 };
 
 exports.updateCliente = async (id, updateData) => {
-    // Verificar si el email ya existe en otro cliente (solo si el email no está vacío)
-    if (updateData.email && updateData.email.trim() !== '') {
-        const existingCliente = await prisma.cliente.findFirst({
-            where: {
-                email: updateData.email.toLowerCase(),
-                id: { not: id }
+    // Normalizar email: convertir strings vacíos, undefined, o null a null
+    if (updateData.email !== undefined) {
+        const emailNormalizado = updateData.email && typeof updateData.email === 'string' && updateData.email.trim() !== ''
+            ? updateData.email.trim().toLowerCase()
+            : null;
+
+        // Verificar si el email ya existe en otro cliente (solo si el email no está vacío/null)
+        if (emailNormalizado) {
+            const existingCliente = await prisma.cliente.findFirst({
+                where: {
+                    email: emailNormalizado,
+                    id: { not: id }
+                }
+            });
+            
+            if (existingCliente) {
+                const error = new Error('Ya existe un cliente con ese email.');
+                error.status = 409; // Conflict
+                throw error;
             }
-        });
-        
-        if (existingCliente) {
-            const error = new Error('Ya existe un cliente con ese email.');
-            error.status = 409; // Conflict
-            throw error;
         }
-        updateData.email = updateData.email.toLowerCase();
-    } else if (updateData.email !== undefined) {
-        // Si el email está vacío, establecerlo como null
-        updateData.email = null;
+        
+        // Actualizar el email normalizado
+        updateData.email = emailNormalizado;
+    }
+
+    // Normalizar otros campos opcionales que pueden venir como strings vacíos
+    if (updateData.telefonoSecundario !== undefined) {
+        updateData.telefonoSecundario = (updateData.telefonoSecundario && updateData.telefonoSecundario.trim() !== '') 
+            ? updateData.telefonoSecundario 
+            : null;
+    }
+    
+    if (updateData.numeroInterior !== undefined) {
+        updateData.numeroInterior = (updateData.numeroInterior && updateData.numeroInterior.trim() !== '') 
+            ? updateData.numeroInterior 
+            : null;
+    }
+    
+    if (updateData.rfc !== undefined) {
+        updateData.rfc = (updateData.rfc && updateData.rfc.trim() !== '') 
+            ? updateData.rfc 
+            : null;
+    }
+    
+    if (updateData.curp !== undefined) {
+        updateData.curp = (updateData.curp && updateData.curp.trim() !== '') 
+            ? updateData.curp 
+            : null;
     }
 
     // Actualizar el cliente
@@ -162,7 +235,11 @@ exports.updateCliente = async (id, updateData) => {
         }
     });
 
-    return clienteActualizado;
+    // Normalizar email null a string vacío para compatibilidad con el frontend
+    return {
+        ...clienteActualizado,
+        email: clienteActualizado.email ?? ''
+    };
 };
 
 exports.deleteCliente = async (id) => {

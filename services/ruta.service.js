@@ -211,8 +211,7 @@ exports.getAllRutas = async (filtros = {}) => {
                         }
                     }
                 }
-            },
-            sede: true
+            }
         },
         orderBy: { fechaCreacion: 'desc' }
     });
@@ -220,6 +219,22 @@ exports.getAllRutas = async (filtros = {}) => {
     console.log(`Rutas encontradas: ${rutas.length}`);
     if (rutas.length > 0) {
         console.log('Primeras rutas:', rutas.slice(0, 3).map(r => ({ id: r.id, nombre: r.nombre, sedeId: r.sedeId })));
+    }
+
+    // Si la relación sede no está disponible, cargarla manualmente
+    if (rutas.length > 0 && !rutas[0].sede && rutas[0].sedeId) {
+        for (const ruta of rutas) {
+            if (ruta.sedeId) {
+                try {
+                    ruta.sede = await prisma.sede.findUnique({
+                        where: { id: ruta.sedeId }
+                    });
+                } catch (e) {
+                    console.warn(`No se pudo cargar la sede ${ruta.sedeId} para la ruta ${ruta.id}`);
+                    ruta.sede = null;
+                }
+            }
+        }
     }
 
     return rutas;
