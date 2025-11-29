@@ -13,7 +13,9 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "prisma:push": "prisma db push",
-    "seed:user": "node scripts/createTestUser.js"
+    "seed:user": "node scripts/createTestUser.js",
+    "build": "prisma generate",
+    "postinstall": "prisma generate"
   },
   "keywords": [
     "backend",

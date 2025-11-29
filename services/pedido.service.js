@@ -106,9 +106,16 @@ exports.getAllPedidos = async (filtros = {}) => {
             select: {
               id: true,
               nombre: true,
-              categoria: true,
+              categoriaId: true,
               precio: true,
-              unidad: true
+              unidad: true,
+              categoria: {
+                select: {
+                  id: true,
+                  nombre: true,
+                  codigo: true
+                }
+              }
             }
           }
         }
@@ -247,9 +254,16 @@ exports.createPedido = async (pedidoData) => {
             select: {
               id: true,
               nombre: true,
-              categoria: true,
+              categoriaId: true,
               precio: true,
-              unidad: true
+              unidad: true,
+              categoria: {
+                select: {
+                  id: true,
+                  nombre: true,
+                  codigo: true
+                }
+              }
             }
           }
         }
