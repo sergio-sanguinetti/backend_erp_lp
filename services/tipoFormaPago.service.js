@@ -2,6 +2,12 @@ const { prisma } = require('../config/database')
 
 // Obtener todos los tipos de formas de pago
 exports.getAllTiposFormaPago = async (filtros = {}) => {
+  // Validar que el modelo esté disponible
+  if (!prisma.tipoFormaPagoConfig) {
+    console.warn('Modelo TipoFormaPagoConfig no está disponible en Prisma. Por favor, regenera el cliente de Prisma ejecutando: npx prisma generate')
+    return []
+  }
+
   const where = {}
 
   if (filtros.activo !== undefined) {
@@ -16,20 +22,37 @@ exports.getAllTiposFormaPago = async (filtros = {}) => {
     where.nombre = { contains: filtros.nombre, mode: 'insensitive' }
   }
 
-  return await prisma.tipoFormaPagoConfig.findMany({
-    where,
-    orderBy: [
-      { orden: 'asc' },
-      { nombre: 'asc' }
-    ]
-  })
+  try {
+    return await prisma.tipoFormaPagoConfig.findMany({
+      where,
+      orderBy: [
+        { orden: 'asc' },
+        { nombre: 'asc' }
+      ]
+    })
+  } catch (error) {
+    // Si la tabla no existe, retornar array vacío en lugar de lanzar error
+    if (error.code === 'P2021' || error.message?.includes('does not exist') || error.message?.includes('Unknown table')) {
+      console.warn('Tabla tipos_forma_pago no existe aún. Ejecuta la migración de Prisma.')
+      return []
+    }
+    throw error
+  }
 }
 
 // Obtener tipo de forma de pago por ID
 exports.findTipoFormaPagoById = async (id) => {
-  return await prisma.tipoFormaPagoConfig.findUnique({
-    where: { id }
-  })
+  try {
+    return await prisma.tipoFormaPagoConfig.findUnique({
+      where: { id }
+    })
+  } catch (error) {
+    if (error.code === 'P2021' || error.message?.includes('does not exist') || error.message?.includes('Unknown table')) {
+      console.warn('Tabla tipos_forma_pago no existe aún. Ejecuta la migración de Prisma.')
+      return null
+    }
+    throw error
+  }
 }
 
 // Obtener tipo de forma de pago por código

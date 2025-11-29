@@ -4,6 +4,11 @@ const { prisma } = require('../config/database');
 
 // Obtener la configuración única (solo debe haber una fila)
 exports.getConfiguracion = async () => {
+  // Validar que el modelo esté disponible
+  if (!prisma.configuracion) {
+    throw new Error('Modelo Configuracion no está disponible en Prisma. Por favor, regenera el cliente de Prisma ejecutando: npx prisma generate');
+  }
+
   // Buscar la primera configuración (solo debería haber una)
   const configuracion = await prisma.configuracion.findFirst();
 

@@ -3,6 +3,11 @@
 const { prisma } = require('../config/database');
 
 exports.getAllDescuentos = async () => {
+  // Validar que el modelo esté disponible
+  if (!prisma.descuentoRepartidor) {
+    throw new Error('Modelo DescuentoRepartidor no está disponible en Prisma. Por favor, regenera el cliente de Prisma ejecutando: npx prisma generate');
+  }
+
   const descuentos = await prisma.descuentoRepartidor.findMany({
     include: {
       repartidor: true

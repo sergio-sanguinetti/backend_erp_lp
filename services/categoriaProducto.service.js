@@ -3,6 +3,11 @@
 const { prisma } = require('../config/database');
 
 exports.getAllCategorias = async (filtros = {}) => {
+  // Validar que el modelo esté disponible
+  if (!prisma.categoriaProducto) {
+    throw new Error('Modelo CategoriaProducto no está disponible en Prisma. Por favor, regenera el cliente de Prisma ejecutando: npx prisma generate');
+  }
+
   const where = {};
   
   if (filtros.activa !== undefined) {

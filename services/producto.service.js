@@ -6,7 +6,7 @@ exports.getAllProductos = async (filtros = {}) => {
   const where = {};
   
   if (filtros.categoria) {
-    where.categoria = filtros.categoria;
+    where.categoriaId = filtros.categoria;
   }
   
   if (filtros.activo !== undefined) {
@@ -17,16 +17,32 @@ exports.getAllProductos = async (filtros = {}) => {
     where.sedeId = filtros.sedeId;
   }
 
+  // Obtener productos con sede, luego agregar categoria manualmente para evitar problemas con Prisma
   const productos = await prisma.producto.findMany({
     where,
     include: {
-      sede: true,
-      categoria: true
+      sede: true
     },
     orderBy: {
       fechaCreacion: 'desc'
     }
   });
+
+  // Agregar categoria manualmente para cada producto
+  for (const producto of productos) {
+    if (producto.categoriaId) {
+      try {
+        producto.categoria = await prisma.categoriaProducto.findUnique({
+          where: { id: producto.categoriaId }
+        });
+      } catch (e) {
+        // Si falla, dejar categoria como null
+        producto.categoria = null;
+      }
+    } else {
+      producto.categoria = null;
+    }
+  }
 
   return productos;
 };
@@ -35,10 +51,22 @@ exports.findProductoById = async (id) => {
   const producto = await prisma.producto.findUnique({
     where: { id },
     include: {
-      sede: true,
-      categoria: true
+      sede: true
     }
   });
+
+  // Agregar categoria manualmente si es necesario
+  if (producto && producto.categoriaId) {
+    try {
+      producto.categoria = await prisma.categoriaProducto.findUnique({
+        where: { id: producto.categoriaId }
+      });
+    } catch (e) {
+      producto.categoria = null;
+    }
+  } else if (producto) {
+    producto.categoria = null;
+  }
 
   return producto;
 };
@@ -80,10 +108,20 @@ exports.createProducto = async (productoData) => {
       sedeId: productoData.sedeId || null
     },
     include: {
-      sede: true,
-      categoria: true
+      sede: true
     }
   });
+  
+  // Agregar categoria manualmente
+  if (nuevoProducto.categoriaId) {
+    try {
+      nuevoProducto.categoria = await prisma.categoriaProducto.findUnique({
+        where: { id: nuevoProducto.categoriaId }
+      });
+    } catch (e) {
+      nuevoProducto.categoria = null;
+    }
+  }
 
   return nuevoProducto;
 };
@@ -139,10 +177,20 @@ exports.updateProducto = async (id, updateData) => {
       sedeId: updateData.sedeId !== undefined ? updateData.sedeId : productoExistente.sedeId
     },
     include: {
-      sede: true,
-      categoria: true
+      sede: true
     }
   });
+  
+  // Agregar categoria manualmente
+  if (productoActualizado.categoriaId) {
+    try {
+      productoActualizado.categoria = await prisma.categoriaProducto.findUnique({
+        where: { id: productoActualizado.categoriaId }
+      });
+    } catch (e) {
+      productoActualizado.categoria = null;
+    }
+  }
 
   return productoActualizado;
 };
