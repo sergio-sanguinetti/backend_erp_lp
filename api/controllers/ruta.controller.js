@@ -7,8 +7,12 @@ exports.getAllRutas = async (req, res, next) => {
             nombre: req.query.nombre,
             zona: req.query.zona,
             activa: req.query.activa,
-            repartidor: req.query.repartidor
+            repartidor: req.query.repartidor,
+            sedeId: req.query.sedeId
         };
+        
+        console.log('getAllRutas - Query params recibidos:', req.query);
+        console.log('getAllRutas - Filtros construidos:', filtros);
         
         const rutas = await rutaService.getAllRutas(filtros);
         
@@ -49,8 +53,8 @@ exports.getRutaById = async (req, res, next) => {
 // Crear nueva ruta
 exports.createRuta = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador o gestor
-        if (req.user.rol !== 'administrador' && req.user.rol !== 'gestor') {
+        // Verificar que el usuario sea administrador, superAdministrador o gestor
+        if (req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador' && req.user.rol !== 'gestor') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores y gestores pueden crear rutas.' });
         }
 
@@ -82,8 +86,8 @@ exports.createRuta = async (req, res, next) => {
 // Actualizar ruta
 exports.updateRuta = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador o gestor
-        if (req.user.rol !== 'administrador' && req.user.rol !== 'gestor') {
+        // Verificar que el usuario sea administrador, superAdministrador o gestor
+        if (req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador' && req.user.rol !== 'gestor') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores y gestores pueden modificar rutas.' });
         }
 
@@ -129,8 +133,8 @@ exports.updateRuta = async (req, res, next) => {
 // Eliminar ruta
 exports.deleteRuta = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador o gestor
-        if (req.user.rol !== 'administrador' && req.user.rol !== 'gestor') {
+        // Verificar que el usuario sea administrador, superAdministrador o gestor
+        if (req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador' && req.user.rol !== 'gestor') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores y gestores pueden eliminar rutas.' });
         }
 

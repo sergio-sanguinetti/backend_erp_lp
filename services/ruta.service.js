@@ -60,6 +60,7 @@ exports.createRuta = async (rutaData) => {
             descripcion: rutaData.descripcion || null,
             zona: zonaNombre,
             zonaId: rutaData.zonaId || null,
+            sedeId: rutaData.sedeId || null,
             activa: rutaData.activa !== undefined ? rutaData.activa : true,
             horarioInicio: rutaData.horarioInicio || null,
             horarioFin: rutaData.horarioFin || null,
@@ -96,7 +97,8 @@ exports.createRuta = async (rutaData) => {
                         }
                     }
                 }
-            }
+            },
+            sede: true
         }
     });
 
@@ -131,7 +133,8 @@ exports.findRutaById = async (id) => {
                         }
                     }
                 }
-            }
+            },
+            sede: true
         }
     });
 };
@@ -150,7 +153,18 @@ exports.getAllRutas = async (filtros = {}) => {
     }
 
     if (filtros.activa !== undefined && filtros.activa !== '') {
-        where.activa = filtros.activa === 'activa' || filtros.activa === true;
+        // Aceptar 'true', 'activa', true, o '1' como valores para activa
+        const activaValue = filtros.activa;
+        if (activaValue === 'true' || activaValue === true || activaValue === 'activa' || activaValue === '1') {
+            where.activa = true;
+        } else if (activaValue === 'false' || activaValue === false || activaValue === 'inactiva' || activaValue === '0') {
+            where.activa = false;
+        }
+    }
+
+    if (filtros.sedeId) {
+        where.sedeId = filtros.sedeId;
+        console.log('Filtro por sedeId aplicado:', filtros.sedeId);
     }
 
     if (filtros.repartidor) {
@@ -167,7 +181,10 @@ exports.getAllRutas = async (filtros = {}) => {
         };
     }
 
-    return await prisma.ruta.findMany({
+    console.log('Filtros recibidos en getAllRutas:', filtros);
+    console.log('Where clause:', JSON.stringify(where, null, 2));
+
+    const rutas = await prisma.ruta.findMany({
         where,
         include: {
             repartidores: {
@@ -194,10 +211,18 @@ exports.getAllRutas = async (filtros = {}) => {
                         }
                     }
                 }
-            }
+            },
+            sede: true
         },
         orderBy: { fechaCreacion: 'desc' }
     });
+
+    console.log(`Rutas encontradas: ${rutas.length}`);
+    if (rutas.length > 0) {
+        console.log('Primeras rutas:', rutas.slice(0, 3).map(r => ({ id: r.id, nombre: r.nombre, sedeId: r.sedeId })));
+    }
+
+    return rutas;
 };
 
 exports.updateRuta = async (id, updateData) => {
@@ -304,7 +329,8 @@ exports.updateRuta = async (id, updateData) => {
                         }
                     }
                 }
-            }
+            },
+            sede: true
         }
     });
 };

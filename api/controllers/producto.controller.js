@@ -40,8 +40,8 @@ exports.createProducto = async (req, res, next) => {
       return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden crear productos.' });
     }
 
-    // Normalizar categoría: convertir guiones a guiones bajos
-    if (req.body.categoria) {
+    // Normalizar categoría: convertir guiones a guiones bajos (solo si se proporciona)
+    if (req.body.categoria && typeof req.body.categoria === 'string') {
       req.body.categoria = req.body.categoria.replace(/-/g, '_');
     }
 
@@ -68,8 +68,8 @@ exports.updateProducto = async (req, res, next) => {
     const { id } = req.params;
     const updateData = req.body;
 
-    // Normalizar categoría si se proporciona: convertir guiones a guiones bajos
-    if (updateData.categoria) {
+    // Normalizar categoría si se proporciona: convertir guiones a guiones bajos (solo si es string)
+    if (updateData.categoria && typeof updateData.categoria === 'string') {
       updateData.categoria = updateData.categoria.replace(/-/g, '_');
     }
 

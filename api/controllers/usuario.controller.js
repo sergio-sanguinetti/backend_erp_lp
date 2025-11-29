@@ -289,8 +289,8 @@ exports.updateProfile = async (req, res, next) => {
 // Obtener usuario por ID (solo administradores)
 exports.getUsuarioById = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador
-        if (req.user.rol !== 'administrador') {
+        // Verificar que el usuario sea administrador o superAdministrador
+        if (req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden ver esta información.' });
         }
 
@@ -312,16 +312,15 @@ exports.getUsuarioById = async (req, res, next) => {
 // Actualizar usuario (solo administradores)
 exports.updateUsuario = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador
-        if (req.user.rol !== 'administrador') {
+        // Verificar que el usuario sea administrador o superAdministrador
+        if (req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden modificar usuarios.' });
         }
 
         const { id } = req.params;
         const updateData = req.body;
 
-        // No permitir cambiar la contraseña desde aquí
-        delete updateData.password;
+        // No permitir cambiar el twoFactorSecret desde aquí
         delete updateData.twoFactorSecret;
 
         const usuario = await usuarioService.updateUsuario(id, updateData);
@@ -345,8 +344,8 @@ exports.updateUsuario = async (req, res, next) => {
 // Eliminar usuario (solo administradores)
 exports.deleteUsuario = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador
-        if (req.user.rol !== 'administrador') {
+        // Verificar que el usuario sea administrador o superAdministrador
+        if (req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden eliminar usuarios.' });
         }
 
@@ -380,8 +379,8 @@ exports.deleteUsuario = async (req, res, next) => {
 // Obtener estadísticas de usuarios (solo administradores)
 exports.getUsuariosStats = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador
-        if (req.user.rol !== 'administrador') {
+        // Verificar que el usuario sea administrador o superAdministrador
+        if (req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden ver esta información.' });
         }
 

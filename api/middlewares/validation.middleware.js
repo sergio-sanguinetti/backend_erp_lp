@@ -31,13 +31,28 @@ exports.validateProducto = [
         .notEmpty().withMessage('El nombre del producto es obligatorio.')
         .isLength({ max: 255 }).withMessage('El nombre no puede exceder 255 caracteres.'),
     body('categoria')
+        .optional()
         .isIn(['gas_lp', 'cilindros', 'tanques_nuevos', 'gas-lp', 'tanques-nuevos'])
         .withMessage('La categoría debe ser: gas_lp (o gas-lp), cilindros, o tanques_nuevos (o tanques-nuevos).')
         .custom((value) => {
-            // Convertir guiones a guiones bajos para coincidir con Prisma
-            const normalized = value.replace(/-/g, '_');
-            if (!['gas_lp', 'cilindros', 'tanques_nuevos'].includes(normalized)) {
-                throw new Error('Categoría inválida');
+            if (value) {
+                // Convertir guiones a guiones bajos para coincidir con Prisma
+                const normalized = value.replace(/-/g, '_');
+                if (!['gas_lp', 'cilindros', 'tanques_nuevos'].includes(normalized)) {
+                    throw new Error('Categoría inválida');
+                }
+            }
+            return true;
+        }),
+    body('categoriaId')
+        .optional()
+        .custom((value) => {
+            if (value) {
+                // Si se proporciona un valor, debe ser un UUID válido
+                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                if (!uuidRegex.test(value)) {
+                    throw new Error('El ID de categoría debe ser un UUID válido.');
+                }
             }
             return true;
         }),

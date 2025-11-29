@@ -30,8 +30,8 @@ exports.getCiudadById = async (req, res, next) => {
 // Crear nueva ciudad
 exports.createCiudad = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador
-        if (req.user && req.user.rol !== 'administrador') {
+        // Verificar que el usuario sea administrador o superAdministrador
+        if (req.user && req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden crear ciudades.' });
         }
 
@@ -50,8 +50,8 @@ exports.createCiudad = async (req, res, next) => {
 // Actualizar ciudad
 exports.updateCiudad = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador
-        if (req.user && req.user.rol !== 'administrador') {
+        // Verificar que el usuario sea administrador o superAdministrador
+        if (req.user && req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden modificar ciudades.' });
         }
 
@@ -77,8 +77,8 @@ exports.updateCiudad = async (req, res, next) => {
 // Eliminar ciudad
 exports.deleteCiudad = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador
-        if (req.user && req.user.rol !== 'administrador') {
+        // Verificar que el usuario sea administrador o superAdministrador
+        if (req.user && req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden eliminar ciudades.' });
         }
 
@@ -132,8 +132,8 @@ exports.getMunicipioById = async (req, res, next) => {
 // Crear nuevo municipio
 exports.createMunicipio = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador
-        if (req.user && req.user.rol !== 'administrador') {
+        // Verificar que el usuario sea administrador o superAdministrador
+        if (req.user && req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden crear municipios.' });
         }
 
@@ -152,8 +152,8 @@ exports.createMunicipio = async (req, res, next) => {
 // Actualizar municipio
 exports.updateMunicipio = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador
-        if (req.user && req.user.rol !== 'administrador') {
+        // Verificar que el usuario sea administrador o superAdministrador
+        if (req.user && req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden modificar municipios.' });
         }
 
@@ -179,8 +179,8 @@ exports.updateMunicipio = async (req, res, next) => {
 // Eliminar municipio
 exports.deleteMunicipio = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador
-        if (req.user && req.user.rol !== 'administrador') {
+        // Verificar que el usuario sea administrador o superAdministrador
+        if (req.user && req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden eliminar municipios.' });
         }
 
@@ -234,8 +234,8 @@ exports.getZonaById = async (req, res, next) => {
 // Crear nueva zona
 exports.createZona = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador
-        if (req.user && req.user.rol !== 'administrador') {
+        // Verificar que el usuario sea administrador o superAdministrador
+        if (req.user && req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden crear zonas.' });
         }
 
@@ -254,8 +254,8 @@ exports.createZona = async (req, res, next) => {
 // Actualizar zona
 exports.updateZona = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador
-        if (req.user && req.user.rol !== 'administrador') {
+        // Verificar que el usuario sea administrador o superAdministrador
+        if (req.user && req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden modificar zonas.' });
         }
 
@@ -281,8 +281,8 @@ exports.updateZona = async (req, res, next) => {
 // Eliminar zona
 exports.deleteZona = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador
-        if (req.user && req.user.rol !== 'administrador') {
+        // Verificar que el usuario sea administrador o superAdministrador
+        if (req.user && req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden eliminar zonas.' });
         }
 

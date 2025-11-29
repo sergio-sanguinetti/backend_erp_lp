@@ -20,7 +20,8 @@ exports.getAllProductos = async (filtros = {}) => {
   const productos = await prisma.producto.findMany({
     where,
     include: {
-      sede: true
+      sede: true,
+      categoria: true
     },
     orderBy: {
       fechaCreacion: 'desc'
@@ -34,7 +35,8 @@ exports.findProductoById = async (id) => {
   const producto = await prisma.producto.findUnique({
     where: { id },
     include: {
-      sede: true
+      sede: true,
+      categoria: true
     }
   });
 
@@ -55,18 +57,31 @@ exports.createProducto = async (productoData) => {
     }
   }
 
+  // Verificar que la categoría existe
+  const categoria = await prisma.categoriaProducto.findUnique({
+    where: { id: productoData.categoriaId }
+  });
+  
+  if (!categoria) {
+    const error = new Error('La categoría especificada no existe.');
+    error.status = 404;
+    throw error;
+  }
+
   const nuevoProducto = await prisma.producto.create({
     data: {
       nombre: productoData.nombre,
-      categoria: productoData.categoria,
+      categoriaId: productoData.categoriaId,
       precio: productoData.precio,
       unidad: productoData.unidad,
       descripcion: productoData.descripcion || null,
+      cantidadKilos: productoData.cantidadKilos || null,
       activo: productoData.activo !== undefined ? productoData.activo : true,
       sedeId: productoData.sedeId || null
     },
     include: {
-      sede: true
+      sede: true,
+      categoria: true
     }
   });
 
@@ -98,19 +113,34 @@ exports.updateProducto = async (id, updateData) => {
     }
   }
 
+  // Verificar que la categoría existe si se proporciona
+  if (updateData.categoriaId) {
+    const categoria = await prisma.categoriaProducto.findUnique({
+      where: { id: updateData.categoriaId }
+    });
+    
+    if (!categoria) {
+      const error = new Error('La categoría especificada no existe.');
+      error.status = 404;
+      throw error;
+    }
+  }
+
   const productoActualizado = await prisma.producto.update({
     where: { id },
     data: {
       nombre: updateData.nombre,
-      categoria: updateData.categoria,
+      categoriaId: updateData.categoriaId !== undefined ? updateData.categoriaId : productoExistente.categoriaId,
       precio: updateData.precio,
       unidad: updateData.unidad,
       descripcion: updateData.descripcion,
+      cantidadKilos: updateData.cantidadKilos !== undefined ? updateData.cantidadKilos : productoExistente.cantidadKilos,
       activo: updateData.activo,
       sedeId: updateData.sedeId !== undefined ? updateData.sedeId : productoExistente.sedeId
     },
     include: {
-      sede: true
+      sede: true,
+      categoria: true
     }
   });
 

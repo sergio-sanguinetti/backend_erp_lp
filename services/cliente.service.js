@@ -11,15 +11,17 @@ const generarCodigoQR = (clienteId, index) => {
 }
 
 exports.createCliente = async (clienteData) => {
-    // Verificar si el email ya existe
-    const existingCliente = await prisma.cliente.findUnique({
-        where: { email: clienteData.email.toLowerCase() }
-    });
-    
-    if (existingCliente) {
-        const error = new Error('Ya existe un cliente con ese email.');
-        error.status = 409; // Conflict
-        throw error;
+    // Verificar si el email ya existe (solo si el email no está vacío)
+    if (clienteData.email && clienteData.email.trim() !== '') {
+        const existingCliente = await prisma.cliente.findUnique({
+            where: { email: clienteData.email.toLowerCase() }
+        });
+        
+        if (existingCliente) {
+            const error = new Error('Ya existe un cliente con ese email.');
+            error.status = 409; // Conflict
+            throw error;
+        }
     }
 
     // Crear el cliente primero sin domicilios
@@ -28,7 +30,7 @@ exports.createCliente = async (clienteData) => {
             nombre: clienteData.nombre,
             apellidoPaterno: clienteData.apellidoPaterno,
             apellidoMaterno: clienteData.apellidoMaterno,
-            email: clienteData.email.toLowerCase(),
+            email: (clienteData.email && clienteData.email.trim() !== '') ? clienteData.email.toLowerCase() : null,
             telefono: clienteData.telefono,
             telefonoSecundario: clienteData.telefonoSecundario || null,
             calle: clienteData.calle,
@@ -130,8 +132,8 @@ exports.getAllClientes = async (filtros = {}) => {
 };
 
 exports.updateCliente = async (id, updateData) => {
-    // Verificar si el email ya existe en otro cliente
-    if (updateData.email) {
+    // Verificar si el email ya existe en otro cliente (solo si el email no está vacío)
+    if (updateData.email && updateData.email.trim() !== '') {
         const existingCliente = await prisma.cliente.findFirst({
             where: {
                 email: updateData.email.toLowerCase(),
@@ -145,6 +147,9 @@ exports.updateCliente = async (id, updateData) => {
             throw error;
         }
         updateData.email = updateData.email.toLowerCase();
+    } else if (updateData.email !== undefined) {
+        // Si el email está vacío, establecerlo como null
+        updateData.email = null;
     }
 
     // Actualizar el cliente

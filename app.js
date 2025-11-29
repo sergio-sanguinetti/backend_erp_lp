@@ -15,6 +15,7 @@ const errorHandler = require('./utils/errorHandler');
 const usuarioRoutes = require('./api/routes/usuario.routes');
 const sedeRoutes = require('./api/routes/sede.routes');
 const formaPagoRoutes = require('./api/routes/formaPago.routes');
+const tipoFormaPagoRoutes = require('./api/routes/tipoFormaPago.routes');
 const rutaRoutes = require('./api/routes/ruta.routes');
 const zonaRoutes = require('./api/routes/zona.routes');
 const clienteRoutes = require('./api/routes/cliente.routes');
@@ -22,6 +23,9 @@ const productoRoutes = require('./api/routes/producto.routes');
 const pedidoRoutes = require('./api/routes/pedido.routes');
 const creditoAbonoRoutes = require('./api/routes/creditoAbono.routes');
 const newsletterRoutes = require('./api/routes/newsletter.routes');
+const configuracionRoutes = require('./api/routes/configuracion.routes');
+const descuentoRepartidorRoutes = require('./api/routes/descuentoRepartidor.routes');
+const categoriaProductoRoutes = require('./api/routes/categoriaProducto.routes');
 
 // Inicialización de Express
 const app = express();
@@ -68,6 +72,7 @@ app.get('/', (req, res) => {
 app.use('/api/usuarios', usuarioRoutes);
 app.use('/api/sedes', sedeRoutes);
 app.use('/api/formas-pago', formaPagoRoutes);
+app.use('/api/tipos-forma-pago', tipoFormaPagoRoutes);
 app.use('/api/rutas', rutaRoutes);
 app.use('/api/zonas', zonaRoutes);
 app.use('/api/clientes', clienteRoutes);
@@ -75,6 +80,9 @@ app.use('/api/productos', productoRoutes);
 app.use('/api/pedidos', pedidoRoutes);
 app.use('/api/creditos-abonos', creditoAbonoRoutes);
 app.use('/api/newsletter', newsletterRoutes);
+app.use('/api/configuraciones', configuracionRoutes);
+app.use('/api/descuentos-repartidor', descuentoRepartidorRoutes);
+app.use('/api/categorias-producto', categoriaProductoRoutes);
 
 // Middleware para manejar rutas no encontradas (404)
 app.use((req, res, next) => {

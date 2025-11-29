@@ -35,8 +35,8 @@ exports.getFormaPagoById = async (req, res, next) => {
 // Crear nueva forma de pago
 exports.createFormaPago = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador
-        if (req.user.rol !== 'administrador') {
+        // Verificar que el usuario sea administrador o superAdministrador
+        if (req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden crear formas de pago.' });
         }
 
@@ -62,8 +62,8 @@ exports.createFormaPago = async (req, res, next) => {
 // Actualizar forma de pago
 exports.updateFormaPago = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador
-        if (req.user.rol !== 'administrador') {
+        // Verificar que el usuario sea administrador o superAdministrador
+        if (req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden modificar formas de pago.' });
         }
 
@@ -94,8 +94,8 @@ exports.updateFormaPago = async (req, res, next) => {
 // Eliminar forma de pago
 exports.deleteFormaPago = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador
-        if (req.user.rol !== 'administrador') {
+        // Verificar que el usuario sea administrador o superAdministrador
+        if (req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden eliminar formas de pago.' });
         }
 

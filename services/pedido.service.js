@@ -197,6 +197,7 @@ exports.createPedido = async (pedidoData) => {
       tipoServicio: pedidoData.tipoServicio,
       repartidorId: pedidoData.repartidorId || null,
       observaciones: pedidoData.observaciones || null,
+      calculoPipas: pedidoData.calculoPipas || null,
       sedeId: pedidoData.sedeId || null,
       // Crear los productos del pedido
       productosPedido: pedidoData.productos ? {

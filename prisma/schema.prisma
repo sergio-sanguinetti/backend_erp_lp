@@ -33,6 +33,7 @@ model Usuario {
   rutas                  UsuarioRuta[]
   pedidos                Pedido[]
   historialLimiteCredito HistorialLimiteCredito[]
+  descuentosRepartidor   DescuentoRepartidor[]
 
   @@map("usuarios")
 }
@@ -68,6 +69,7 @@ model Sede {
   formasPagoSedes FormaPagoSede[]
   productos       Producto[]
   pedidos         Pedido[]
+  rutas           Ruta[]
 
   @@map("sedes")
 }
@@ -127,6 +129,23 @@ enum TipoFormaPago {
   credito
 }
 
+model TipoFormaPagoConfig {
+  id          String        @id @default(uuid())
+  codigo      String        @unique @db.VarChar(50)
+  nombre      String        @db.VarChar(255)
+  descripcion String?       @db.VarChar(500)
+  activo      Boolean       @default(true)
+  icono       String?       @db.VarChar(50)
+  color       String?       @db.VarChar(50)
+  orden       Int           @default(0)
+  fechaCreacion     DateTime  @default(now()) @map("fecha_creacion")
+  fechaModificacion DateTime  @updatedAt @map("fecha_modificacion")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  @@map("tipos_forma_pago")
+}
+
 model Ruta {
   id                  String        @id @default(uuid())
   nombre              String        @db.VarChar(255)
@@ -135,6 +154,8 @@ model Ruta {
   zona                String        @db.VarChar(100)
   zonaId              String?       @map("zona_id")
   zonaRelacion        Zona?         @relation(fields: [zonaId], references: [id], onDelete: SetNull)
+  sedeId              String?       @map("sede_id")
+  sede                Sede?         @relation(fields: [sedeId], references: [id], onDelete: SetNull)
   activa              Boolean       @default(true)
   horarioInicio       String?       @db.VarChar(10)
   horarioFin          String?       @db.VarChar(10)
@@ -225,7 +246,7 @@ model Cliente {
   nombre                     String                   @db.VarChar(255)
   apellidoPaterno            String                   @db.VarChar(255)
   apellidoMaterno            String                   @db.VarChar(255)
-  email                      String                   @unique @db.VarChar(255)
+  email                      String?                  @unique @db.VarChar(255)
   telefono                   String                   @db.VarChar(50)
   telefonoSecundario         String?                  @db.VarChar(50)
   calle                      String                   @db.VarChar(255)
@@ -278,19 +299,30 @@ model Domicilio {
   @@map("domicilios")
 }
 
-enum CategoriaProducto {
-  gas_lp
-  cilindros
-  tanques_nuevos
+model CategoriaProducto {
+  id                String            @id @default(uuid())
+  nombre            String            @unique @db.VarChar(100)
+  codigo            String            @unique @db.VarChar(50)
+  descripcion       String?           @db.VarChar(500)
+  activa            Boolean           @default(true)
+  fechaCreacion     DateTime          @default(now()) @map("fecha_creacion")
+  fechaModificacion DateTime          @updatedAt @map("fecha_modificacion")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  productos         Producto[]
+
+  @@map("categorias_producto")
 }
 
 model Producto {
   id                String            @id @default(uuid())
   nombre            String            @db.VarChar(255)
-  categoria         CategoriaProducto
+  categoriaId       String            @map("categoria_id")
+  categoria         CategoriaProducto @relation(fields: [categoriaId], references: [id], onDelete: Restrict)
   precio            Float
   unidad            String            @db.VarChar(50)
   descripcion       String?           @db.VarChar(500)
+  cantidadKilos    Float?            @map("cantidad_kilos")
   activo            Boolean           @default(true)
   sedeId            String?           @map("sede_id")
   sede              Sede?             @relation(fields: [sedeId], references: [id], onDelete: SetNull)
@@ -331,6 +363,7 @@ model Pedido {
   repartidorId      String?      @map("repartidor_id")
   repartidor        Usuario?     @relation(fields: [repartidorId], references: [id], onDelete: SetNull)
   observaciones     String?      @db.VarChar(1000)
+  calculoPipas      Json?        @map("calculo_pipas")
   sedeId            String?      @map("sede_id")
   sede              Sede?        @relation(fields: [sedeId], references: [id], onDelete: SetNull)
   fechaCreacion     DateTime     @default(now()) @map("fecha_creacion")
@@ -484,4 +517,32 @@ model NewsletterItem {
   updatedAt           DateTime           @updatedAt @map("updated_at")
 
   @@map("newsletter_items")
+}
+
+model Configuracion {
+  id                  String   @id @default(uuid())
+  precioPorLitroGasLP Float    @default(18.50) @map("precio_por_litro_gas_lp")
+  precioPorKG         Float    @default(18.50) @map("precio_por_kg")
+  fechaCreacion       DateTime @default(now()) @map("fecha_creacion")
+  fechaModificacion   DateTime @updatedAt @map("fecha_modificacion")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("configuraciones")
+}
+
+model DescuentoRepartidor {
+  id                  String   @id @default(uuid())
+  repartidorId        String   @map("repartidor_id")
+  repartidor          Usuario  @relation(fields: [repartidorId], references: [id], onDelete: Cascade)
+  descuentoAutorizado Float    @default(0) @map("descuento_autorizado")
+  descuentoPorLitro   Float?   @map("descuento_por_litro")
+  activo              Boolean  @default(true)
+  fechaCreacion       DateTime @default(now()) @map("fecha_creacion")
+  fechaModificacion   DateTime @updatedAt @map("fecha_modificacion")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@unique([repartidorId])
+  @@map("descuentos_repartidor")
 }

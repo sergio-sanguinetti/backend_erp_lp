@@ -29,8 +29,8 @@ exports.getSedeById = async (req, res, next) => {
 // Crear nueva sede
 exports.createSede = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador
-        if (req.user.rol !== 'administrador') {
+        // Verificar que el usuario sea administrador o superAdministrador
+        if (req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden crear sedes.' });
         }
 
@@ -49,8 +49,8 @@ exports.createSede = async (req, res, next) => {
 // Actualizar sede
 exports.updateSede = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador
-        if (req.user.rol !== 'administrador') {
+        // Verificar que el usuario sea administrador o superAdministrador
+        if (req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden modificar sedes.' });
         }
 
@@ -76,8 +76,8 @@ exports.updateSede = async (req, res, next) => {
 // Eliminar sede
 exports.deleteSede = async (req, res, next) => {
     try {
-        // Verificar que el usuario sea administrador
-        if (req.user.rol !== 'administrador') {
+        // Verificar que el usuario sea administrador o superAdministrador
+        if (req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden eliminar sedes.' });
         }
 
