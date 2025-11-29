@@ -3,8 +3,10 @@
 const { prisma } = require('../config/database');
 
 exports.getAllProductos = async (filtros = {}) => {
+  // Construir where clause explícitamente, asegurándonos de usar solo campos que existen en la tabla
   const where = {};
   
+  // Solo usar categoriaId, nunca categoria (que es una relación, no una columna)
   if (filtros.categoria) {
     where.categoriaId = filtros.categoria;
   }
@@ -17,11 +19,40 @@ exports.getAllProductos = async (filtros = {}) => {
     where.sedeId = filtros.sedeId;
   }
 
-  // Obtener productos con sede, luego agregar categoria manualmente para evitar problemas con Prisma
+  // Obtener productos SOLO con sede, sin intentar incluir categoria (es una relación)
+  // Esto evita que Prisma intente acceder a una columna 'categoria' que no existe
   const productos = await prisma.producto.findMany({
-    where,
-    include: {
-      sede: true
+    where: {
+      ...where,
+      // Asegurarse de que no haya referencias a 'categoria' como columna
+    },
+    select: {
+      id: true,
+      nombre: true,
+      categoriaId: true,
+      precio: true,
+      unidad: true,
+      descripcion: true,
+      cantidadKilos: true,
+      activo: true,
+      sedeId: true,
+      fechaCreacion: true,
+      fechaModificacion: true,
+      createdAt: true,
+      updatedAt: true,
+      sede: {
+        select: {
+          id: true,
+          nombre: true,
+          direccion: true,
+          telefono: true,
+          email: true,
+          estado: true,
+          fechaCreacion: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      }
     },
     orderBy: {
       fechaCreacion: 'desc'
@@ -48,10 +79,36 @@ exports.getAllProductos = async (filtros = {}) => {
 };
 
 exports.findProductoById = async (id) => {
+  // Usar select en lugar de include para evitar problemas con relaciones
   const producto = await prisma.producto.findUnique({
     where: { id },
-    include: {
-      sede: true
+    select: {
+      id: true,
+      nombre: true,
+      categoriaId: true,
+      precio: true,
+      unidad: true,
+      descripcion: true,
+      cantidadKilos: true,
+      activo: true,
+      sedeId: true,
+      fechaCreacion: true,
+      fechaModificacion: true,
+      createdAt: true,
+      updatedAt: true,
+      sede: {
+        select: {
+          id: true,
+          nombre: true,
+          direccion: true,
+          telefono: true,
+          email: true,
+          estado: true,
+          fechaCreacion: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      }
     }
   });
 
@@ -107,8 +164,33 @@ exports.createProducto = async (productoData) => {
       activo: productoData.activo !== undefined ? productoData.activo : true,
       sedeId: productoData.sedeId || null
     },
-    include: {
-      sede: true
+    select: {
+      id: true,
+      nombre: true,
+      categoriaId: true,
+      precio: true,
+      unidad: true,
+      descripcion: true,
+      cantidadKilos: true,
+      activo: true,
+      sedeId: true,
+      fechaCreacion: true,
+      fechaModificacion: true,
+      createdAt: true,
+      updatedAt: true,
+      sede: {
+        select: {
+          id: true,
+          nombre: true,
+          direccion: true,
+          telefono: true,
+          email: true,
+          estado: true,
+          fechaCreacion: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      }
     }
   });
   
@@ -176,8 +258,33 @@ exports.updateProducto = async (id, updateData) => {
       activo: updateData.activo,
       sedeId: updateData.sedeId !== undefined ? updateData.sedeId : productoExistente.sedeId
     },
-    include: {
-      sede: true
+    select: {
+      id: true,
+      nombre: true,
+      categoriaId: true,
+      precio: true,
+      unidad: true,
+      descripcion: true,
+      cantidadKilos: true,
+      activo: true,
+      sedeId: true,
+      fechaCreacion: true,
+      fechaModificacion: true,
+      createdAt: true,
+      updatedAt: true,
+      sede: {
+        select: {
+          id: true,
+          nombre: true,
+          direccion: true,
+          telefono: true,
+          email: true,
+          estado: true,
+          fechaCreacion: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      }
     }
   });
   
