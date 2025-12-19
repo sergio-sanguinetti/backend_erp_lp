@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -30,29 +24,13 @@ model Usuario {
   fechaRegistro          DateTime                 @default(now())
   createdAt              DateTime                 @default(now()) @map("created_at")
   updatedAt              DateTime                 @updatedAt @map("updated_at")
-  rutas                  UsuarioRuta[]
-  pedidos                Pedido[]
+  descuentosRepartidor   DescuentoRepartidor?
   historialLimiteCredito HistorialLimiteCredito[]
-  descuentosRepartidor   DescuentoRepartidor[]
+  pedidos                Pedido[]
+  rutas                  UsuarioRuta[]
+  cortesCaja             CorteCaja[]
 
   @@map("usuarios")
-}
-
-enum Rol {
-  superAdministrador
-  administrador
-  gestor
-  repartidor
-}
-
-enum Estado {
-  activo
-  inactivo
-}
-
-enum TipoRepartidor {
-  cilindros
-  pipas
 }
 
 model Sede {
@@ -67,16 +45,11 @@ model Sede {
   updatedAt       DateTime        @updatedAt @map("updated_at")
   formasPago      FormaPago[]
   formasPagoSedes FormaPagoSede[]
-  productos       Producto[]
   pedidos         Pedido[]
+  productos       Producto[]
   rutas           Ruta[]
 
   @@map("sedes")
-}
-
-enum EstadoSede {
-  activa
-  inactiva
 }
 
 model FormaPago {
@@ -95,53 +68,47 @@ model FormaPago {
   limiteMaximo        Float?
   limiteMinimo        Float?
   sedeId              String?         @map("sede_id")
-  sede                Sede?           @relation(fields: [sedeId], references: [id], onDelete: SetNull)
-  sedes               FormaPagoSede[]
-  pagosFormaPago      PagoFormaPago[]
   usuarioCreacion     String          @db.VarChar(255)
   usuarioModificacion String          @db.VarChar(255)
   fechaCreacion       DateTime        @default(now()) @map("fecha_creacion")
   fechaModificacion   DateTime        @updatedAt @map("fecha_modificacion")
   createdAt           DateTime        @default(now()) @map("created_at")
   updatedAt           DateTime        @updatedAt @map("updated_at")
+  abonos              AbonoCliente[]
+  sede                Sede?           @relation(fields: [sedeId], references: [id])
+  sedes               FormaPagoSede[]
+  pagosFormaPago      PagoFormaPago[]
 
+  @@index([sedeId], map: "formas_pago_sede_id_fkey")
   @@map("formas_pago")
 }
 
 model FormaPagoSede {
   id          String    @id @default(uuid())
   formaPagoId String    @map("forma_pago_id")
-  formaPago   FormaPago @relation(fields: [formaPagoId], references: [id], onDelete: Cascade)
   sedeId      String    @map("sede_id")
-  sede        Sede      @relation(fields: [sedeId], references: [id], onDelete: Cascade)
   createdAt   DateTime  @default(now()) @map("created_at")
+  formaPago   FormaPago @relation(fields: [formaPagoId], references: [id], onDelete: Cascade)
+  sede        Sede      @relation(fields: [sedeId], references: [id], onDelete: Cascade)
 
   @@unique([formaPagoId, sedeId])
+  @@index([sedeId], map: "formas_pago_sedes_sede_id_fkey")
   @@map("formas_pago_sedes")
 }
 
-enum TipoFormaPago {
-  efectivo
-  terminal
-  transferencia
-  cheque
-  deposito
-  credito
-}
-
 model TipoFormaPagoConfig {
-  id          String        @id @default(uuid())
-  codigo      String        @unique @db.VarChar(50)
-  nombre      String        @db.VarChar(255)
-  descripcion String?       @db.VarChar(500)
-  activo      Boolean       @default(true)
-  icono       String?       @db.VarChar(50)
-  color       String?       @db.VarChar(50)
-  orden       Int           @default(0)
-  fechaCreacion     DateTime  @default(now()) @map("fecha_creacion")
-  fechaModificacion DateTime  @updatedAt @map("fecha_modificacion")
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
+  id                String   @id @default(uuid())
+  codigo            String   @unique @db.VarChar(50)
+  nombre            String   @db.VarChar(255)
+  descripcion       String?  @db.VarChar(500)
+  activo            Boolean  @default(true)
+  icono             String?  @db.VarChar(50)
+  color             String?  @db.VarChar(50)
+  orden             Int      @default(0)
+  fechaCreacion     DateTime @default(now()) @map("fecha_creacion")
+  fechaModificacion DateTime @updatedAt @map("fecha_modificacion")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   @@map("tipos_forma_pago")
 }
@@ -153,9 +120,6 @@ model Ruta {
   descripcion         String?       @db.VarChar(500)
   zona                String        @db.VarChar(100)
   zonaId              String?       @map("zona_id")
-  zonaRelacion        Zona?         @relation(fields: [zonaId], references: [id], onDelete: SetNull)
-  sedeId              String?       @map("sede_id")
-  sede                Sede?         @relation(fields: [sedeId], references: [id], onDelete: SetNull)
   activa              Boolean       @default(true)
   horarioInicio       String?       @db.VarChar(10)
   horarioFin          String?       @db.VarChar(10)
@@ -165,10 +129,15 @@ model Ruta {
   fechaModificacion   DateTime      @updatedAt @map("fecha_modificacion")
   createdAt           DateTime      @default(now()) @map("created_at")
   updatedAt           DateTime      @updatedAt @map("updated_at")
-  repartidores        UsuarioRuta[]
+  sedeId              String?       @map("sede_id")
   clientes            Cliente[]
   pedidos             Pedido[]
+  sede                Sede?         @relation(fields: [sedeId], references: [id])
+  zonaRelacion        Zona?         @relation(fields: [zonaId], references: [id])
+  repartidores        UsuarioRuta[]
 
+  @@index([sedeId], map: "rutas_sede_id_fkey")
+  @@index([zonaId], map: "rutas_zona_id_fkey")
   @@map("rutas")
 }
 
@@ -180,6 +149,7 @@ model UsuarioRuta {
   usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@unique([rutaId, usuarioId])
+  @@index([usuarioId], map: "usuario_ruta_usuario_id_fkey")
   @@map("usuario_ruta")
 }
 
@@ -202,13 +172,14 @@ model Municipio {
   nombre        String   @db.VarChar(255)
   codigo        String?  @db.VarChar(50)
   ciudadId      String   @map("ciudad_id")
-  ciudad        Ciudad   @relation(fields: [ciudadId], references: [id], onDelete: Cascade)
   activo        Boolean  @default(true)
   fechaCreacion DateTime @default(now()) @map("fecha_creacion")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
+  ciudad        Ciudad   @relation(fields: [ciudadId], references: [id], onDelete: Cascade)
   zonas         Zona[]
 
+  @@index([ciudadId], map: "municipios_ciudad_id_fkey")
   @@map("municipios")
 }
 
@@ -218,27 +189,15 @@ model Zona {
   codigo        String?   @db.VarChar(50)
   descripcion   String?   @db.VarChar(500)
   municipioId   String    @map("municipio_id")
-  municipio     Municipio @relation(fields: [municipioId], references: [id], onDelete: Cascade)
   activa        Boolean   @default(true)
   fechaCreacion DateTime  @default(now()) @map("fecha_creacion")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
   rutas         Ruta[]
+  municipio     Municipio @relation(fields: [municipioId], references: [id], onDelete: Cascade)
 
+  @@index([municipioId], map: "zonas_municipio_id_fkey")
   @@map("zonas")
-}
-
-enum EstadoCliente {
-  activo
-  suspendido
-  inactivo
-}
-
-enum TipoDomicilio {
-  principal
-  facturacion
-  entrega
-  otro
 }
 
 model Cliente {
@@ -259,7 +218,6 @@ model Cliente {
   rfc                        String?                  @db.VarChar(20)
   curp                       String?                  @db.VarChar(20)
   rutaId                     String?                  @map("ruta_id")
-  ruta                       Ruta?                    @relation(fields: [rutaId], references: [id], onDelete: SetNull)
   limiteCredito              Float                    @default(0)
   saldoActual                Float                    @default(0)
   pagosEspecialesAutorizados Boolean                  @default(false)
@@ -268,19 +226,21 @@ model Cliente {
   ultimaModificacion         DateTime                 @updatedAt @map("ultima_modificacion")
   createdAt                  DateTime                 @default(now()) @map("created_at")
   updatedAt                  DateTime                 @updatedAt @map("updated_at")
+  abonos                     AbonoCliente[]
+  ruta                       Ruta?                    @relation(fields: [rutaId], references: [id])
   domicilios                 Domicilio[]
-  pedidos                    Pedido[]
+  historialLimiteCredito     HistorialLimiteCredito[]
   notasCredito               NotaCredito[]
   pagos                      Pago[]
-  historialLimiteCredito     HistorialLimiteCredito[]
+  pedidos                    Pedido[]
 
+  @@index([rutaId], map: "clientes_ruta_id_fkey")
   @@map("clientes")
 }
 
 model Domicilio {
   id              String        @id @default(uuid())
   clienteId       String        @map("cliente_id")
-  cliente         Cliente       @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   tipo            TipoDomicilio
   calle           String        @db.VarChar(255)
   numeroExterior  String        @db.VarChar(20)
@@ -295,20 +255,22 @@ model Domicilio {
   fechaCreacionQR DateTime      @default(now()) @map("fecha_creacion_qr")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
+  cliente         Cliente       @relation(fields: [clienteId], references: [id], onDelete: Cascade)
 
+  @@index([clienteId], map: "domicilios_cliente_id_fkey")
   @@map("domicilios")
 }
 
 model CategoriaProducto {
-  id                String            @id @default(uuid())
-  nombre            String            @unique @db.VarChar(100)
-  codigo            String            @unique @db.VarChar(50)
-  descripcion       String?           @db.VarChar(500)
-  activa            Boolean           @default(true)
-  fechaCreacion     DateTime          @default(now()) @map("fecha_creacion")
-  fechaModificacion DateTime          @updatedAt @map("fecha_modificacion")
-  createdAt         DateTime          @default(now()) @map("created_at")
-  updatedAt         DateTime          @updatedAt @map("updated_at")
+  id                String     @id @default(uuid())
+  nombre            String     @unique @db.VarChar(100)
+  codigo            String     @unique @db.VarChar(50)
+  descripcion       String?    @db.VarChar(500)
+  activa            Boolean    @default(true)
+  fechaCreacion     DateTime   @default(now()) @map("fecha_creacion")
+  fechaModificacion DateTime   @updatedAt @map("fecha_modificacion")
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
   productos         Producto[]
 
   @@map("categorias_producto")
@@ -318,95 +280,83 @@ model Producto {
   id                String            @id @default(uuid())
   nombre            String            @db.VarChar(255)
   categoriaId       String            @map("categoria_id")
-  categoria         CategoriaProducto @relation(fields: [categoriaId], references: [id], onDelete: Restrict)
   precio            Float
   unidad            String            @db.VarChar(50)
   descripcion       String?           @db.VarChar(500)
-  cantidadKilos    Float?            @map("cantidad_kilos")
+  cantidadKilos     Float?            @map("cantidad_kilos")
   activo            Boolean           @default(true)
   sedeId            String?           @map("sede_id")
-  sede              Sede?             @relation(fields: [sedeId], references: [id], onDelete: SetNull)
   fechaCreacion     DateTime          @default(now()) @map("fecha_creacion")
   fechaModificacion DateTime          @updatedAt @map("fecha_modificacion")
   createdAt         DateTime          @default(now()) @map("created_at")
   updatedAt         DateTime          @updatedAt @map("updated_at")
   pedidosProducto   PedidoProducto[]
+  categoria         CategoriaProducto @relation(fields: [categoriaId], references: [id])
+  sede              Sede?             @relation(fields: [sedeId], references: [id])
 
+  @@index([categoriaId], map: "productos_categoria_id_fkey")
+  @@index([sedeId], map: "productos_sede_id_fkey")
   @@map("productos")
 }
 
-enum EstadoPedido {
-  entregado
-  pendiente
-  cancelado
-  en_proceso
-}
-
-enum TipoServicio {
-  pipas
-  cilindros
-}
-
 model Pedido {
-  id                String       @id @default(uuid())
-  numeroPedido      String       @unique @db.VarChar(50)
-  clienteId         String       @map("cliente_id")
-  cliente           Cliente      @relation(fields: [clienteId], references: [id], onDelete: Cascade)
-  rutaId            String?      @map("ruta_id")
-  ruta              Ruta?        @relation(fields: [rutaId], references: [id], onDelete: SetNull)
-  fechaPedido       DateTime     @map("fecha_pedido")
-  horaPedido        String       @map("hora_pedido") @db.VarChar(10)
-  estado            EstadoPedido @default(pendiente)
-  cantidadProductos Int          @default(0) @map("cantidad_productos")
-  ventaTotal        Float        @default(0) @map("venta_total")
-  tipoServicio      TipoServicio @map("tipo_servicio")
-  repartidorId      String?      @map("repartidor_id")
-  repartidor        Usuario?     @relation(fields: [repartidorId], references: [id], onDelete: SetNull)
-  observaciones     String?      @db.VarChar(1000)
-  calculoPipas      Json?        @map("calculo_pipas")
-  sedeId            String?      @map("sede_id")
-  sede              Sede?        @relation(fields: [sedeId], references: [id], onDelete: SetNull)
-  fechaCreacion     DateTime     @default(now()) @map("fecha_creacion")
-  fechaModificacion DateTime     @updatedAt @map("fecha_modificacion")
-  createdAt         DateTime     @default(now()) @map("created_at")
-  updatedAt         DateTime     @updatedAt @map("updated_at")
+  id                String           @id @default(uuid())
+  numeroPedido      String           @unique @db.VarChar(50)
+  clienteId         String           @map("cliente_id")
+  rutaId            String?          @map("ruta_id")
+  fechaPedido       DateTime         @map("fecha_pedido")
+  horaPedido        String           @map("hora_pedido") @db.VarChar(10)
+  estado            EstadoPedido     @default(pendiente)
+  cantidadProductos Int              @default(0) @map("cantidad_productos")
+  ventaTotal        Float            @default(0) @map("venta_total")
+  tipoServicio      TipoServicio     @map("tipo_servicio")
+  repartidorId      String?          @map("repartidor_id")
+  observaciones     String?          @db.VarChar(1000)
+  sedeId            String?          @map("sede_id")
+  fechaCreacion     DateTime         @default(now()) @map("fecha_creacion")
+  fechaModificacion DateTime         @updatedAt @map("fecha_modificacion")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  calculoPipas      String?          @map("calculo_pipas") @db.LongText
+  formasPago        String?          @map("formas_pago") @db.LongText
+  montoPagado       Float            @default(0) @map("monto_pagado")
+  notasCredito      NotaCredito[]
+  pagos             PagoPedido[]
+  productosPedido   PedidoProducto[]
+  cliente           Cliente          @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  repartidor        Usuario?         @relation(fields: [repartidorId], references: [id])
+  ruta              Ruta?            @relation(fields: [rutaId], references: [id])
+  sede              Sede?            @relation(fields: [sedeId], references: [id])
 
-  productosPedido PedidoProducto[]
-  notasCredito    NotaCredito[]
-
+  @@index([clienteId], map: "pedidos_cliente_id_fkey")
+  @@index([repartidorId], map: "pedidos_repartidor_id_fkey")
+  @@index([rutaId], map: "pedidos_ruta_id_fkey")
+  @@index([sedeId], map: "pedidos_sede_id_fkey")
   @@map("pedidos")
 }
 
 model PedidoProducto {
   id         String   @id @default(uuid())
   pedidoId   String   @map("pedido_id")
-  pedido     Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
   productoId String   @map("producto_id")
-  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
   cantidad   Int
   precio     Float
   subtotal   Float
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
+  pedido     Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
 
+  @@index([pedidoId], map: "pedido_productos_pedido_id_fkey")
+  @@index([productoId], map: "pedido_productos_producto_id_fkey")
   @@map("pedido_productos")
-}
-
-enum EstadoNotaCredito {
-  vigente
-  por_vencer
-  vencida
-  pagada
-  cancelada
 }
 
 model NotaCredito {
   id                String            @id @default(uuid())
   numeroNota        String            @unique @map("numero_nota") @db.VarChar(50)
   clienteId         String            @map("cliente_id")
-  cliente           Cliente           @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   pedidoId          String?           @map("pedido_id")
-  pedido            Pedido?           @relation(fields: [pedidoId], references: [id], onDelete: SetNull)
   fechaVenta        DateTime          @map("fecha_venta")
   fechaVencimiento  DateTime          @map("fecha_vencimiento")
   importe           Float
@@ -418,29 +368,20 @@ model NotaCredito {
   fechaModificacion DateTime          @updatedAt @map("fecha_modificacion")
   createdAt         DateTime          @default(now()) @map("created_at")
   updatedAt         DateTime          @updatedAt @map("updated_at")
+  abonos            AbonoCliente[]
+  cliente           Cliente           @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  pedido            Pedido?           @relation(fields: [pedidoId], references: [id])
   pagos             Pago[]
 
+  @@index([clienteId], map: "notas_credito_cliente_id_fkey")
+  @@index([pedidoId], map: "notas_credito_pedido_id_fkey")
   @@map("notas_credito")
-}
-
-enum EstadoPago {
-  pendiente
-  autorizado
-  rechazado
-  cancelado
-}
-
-enum TipoPago {
-  nota_especifica
-  abono_general
 }
 
 model Pago {
   id                  String          @id @default(uuid())
   clienteId           String          @map("cliente_id")
-  cliente             Cliente         @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   notaCreditoId       String?         @map("nota_credito_id")
-  notaCredito         NotaCredito?    @relation(fields: [notaCreditoId], references: [id], onDelete: SetNull)
   montoTotal          Float           @map("monto_total")
   tipo                TipoPago
   fechaPago           DateTime        @map("fecha_pago")
@@ -454,49 +395,68 @@ model Pago {
   createdAt           DateTime        @default(now()) @map("created_at")
   updatedAt           DateTime        @updatedAt @map("updated_at")
   formasPago          PagoFormaPago[]
+  cliente             Cliente         @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  notaCredito         NotaCredito?    @relation(fields: [notaCreditoId], references: [id])
 
+  @@index([clienteId], map: "pagos_cliente_id_fkey")
+  @@index([notaCreditoId], map: "pagos_nota_credito_id_fkey")
   @@map("pagos")
+}
+
+model AbonoCliente {
+  id              String       @id @default(uuid())
+  clienteId       String       @map("cliente_id")
+  monto           Float
+  fecha           DateTime     @default(now())
+  formaPagoId     String       @map("forma_pago_id")
+  folio           String?      @db.VarChar(255)
+  notaCreditoId   String?      @map("nota_credito_id")
+  usuarioRegistro String       @map("usuario_registro")
+  observaciones   String?      @db.VarChar(1000)
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  cliente         Cliente      @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  formaPago       FormaPago    @relation(fields: [formaPagoId], references: [id])
+  notaCredito     NotaCredito? @relation(fields: [notaCreditoId], references: [id])
+
+  @@index([clienteId], map: "abonos_cliente_cliente_id_fkey")
+  @@index([formaPagoId], map: "abonos_cliente_forma_pago_id_fkey")
+  @@index([notaCreditoId], map: "abonos_cliente_nota_credito_id_fkey")
+  @@map("abonos_cliente")
 }
 
 model PagoFormaPago {
   id          String    @id @default(uuid())
   pagoId      String    @map("pago_id")
-  pago        Pago      @relation(fields: [pagoId], references: [id], onDelete: Cascade)
   formaPagoId String    @map("forma_pago_id")
-  formaPago   FormaPago @relation(fields: [formaPagoId], references: [id], onDelete: Cascade)
   monto       Float
   referencia  String?   @db.VarChar(255)
   banco       String?   @db.VarChar(255)
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
+  formaPago   FormaPago @relation(fields: [formaPagoId], references: [id], onDelete: Cascade)
+  pago        Pago      @relation(fields: [pagoId], references: [id], onDelete: Cascade)
 
+  @@index([formaPagoId], map: "pago_forma_pago_forma_pago_id_fkey")
+  @@index([pagoId], map: "pago_forma_pago_pago_id_fkey")
   @@map("pago_forma_pago")
 }
 
 model HistorialLimiteCredito {
   id             String   @id @default(uuid())
   clienteId      String   @map("cliente_id")
-  cliente        Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   usuarioId      String   @map("usuario_id")
-  usuario        Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   limiteAnterior Float    @map("limite_anterior")
   limiteNuevo    Float    @map("limite_nuevo")
   motivo         String   @db.VarChar(500)
   fechaCreacion  DateTime @default(now()) @map("fecha_creacion")
   createdAt      DateTime @default(now()) @map("created_at")
+  cliente        Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  usuario        Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
+  @@index([clienteId], map: "historial_limite_credito_cliente_id_fkey")
+  @@index([usuarioId], map: "historial_limite_credito_usuario_id_fkey")
   @@map("historial_limite_credito")
-}
-
-enum TipoNewsletterItem {
-  image
-  notification
-}
-
-enum TamañoNewsletter {
-  small
-  medium
-  large
 }
 
 model NewsletterItem {
@@ -521,8 +481,8 @@ model NewsletterItem {
 
 model Configuracion {
   id                  String   @id @default(uuid())
-  precioPorLitroGasLP Float    @default(18.50) @map("precio_por_litro_gas_lp")
-  precioPorKG         Float    @default(18.50) @map("precio_por_kg")
+  precioPorLitroGasLP Float    @default(18.5) @map("precio_por_litro_gas_lp")
+  precioPorKG         Float    @default(18.5) @map("precio_por_kg")
   fechaCreacion       DateTime @default(now()) @map("fecha_creacion")
   fechaModificacion   DateTime @updatedAt @map("fecha_modificacion")
   createdAt           DateTime @default(now()) @map("created_at")
@@ -533,8 +493,7 @@ model Configuracion {
 
 model DescuentoRepartidor {
   id                  String   @id @default(uuid())
-  repartidorId        String   @map("repartidor_id")
-  repartidor          Usuario  @relation(fields: [repartidorId], references: [id], onDelete: Cascade)
+  repartidorId        String   @unique @map("repartidor_id")
   descuentoAutorizado Float    @default(0) @map("descuento_autorizado")
   descuentoPorLitro   Float?   @map("descuento_por_litro")
   activo              Boolean  @default(true)
@@ -542,7 +501,180 @@ model DescuentoRepartidor {
   fechaModificacion   DateTime @updatedAt @map("fecha_modificacion")
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
+  repartidor          Usuario  @relation(fields: [repartidorId], references: [id], onDelete: Cascade)
 
-  @@unique([repartidorId])
   @@map("descuentos_repartidor")
+}
+
+model PagoPedido {
+  id       String         @id @default(uuid())
+  pedidoId String         @map("pedido_id")
+  monto    Float
+  folio    String?        @db.VarChar(255)
+  tipo     TipoPagoPedido
+  metodoId String?        @map("metodo_id")
+  fecha    DateTime       @default(now())
+  pedido   Pedido         @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@index([pedidoId], map: "pagos_pedidos_pedido_id_fkey")
+  @@map("pagos_pedidos")
+}
+
+model CorteCaja {
+  id            String              @id @default(uuid())
+  repartidorId  String              @map("repartidor_id")
+  repartidor    Usuario             @relation(fields: [repartidorId], references: [id])
+  fecha         DateTime            @default(now())
+  tipo          TipoCorte           @map("tipo_corte")
+  totalVentas   Float               @default(0) @map("total_ventas")
+  totalAbonos   Float               @default(0) @map("total_abonos")
+  totalEfectivo Float               @default(0) @map("total_efectivo")
+  totalOtros    Float               @default(0) @map("total_otros")
+  estado        EstadoCorte         @default(pendiente)
+  observaciones String?             @db.VarChar(1000)
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+  dia           String              @db.VarChar(10)
+  depositos     CorteCajaDeposito[]
+  detalles      CorteCajaDetalle[]
+
+  @@unique([repartidorId, dia, tipo])
+  @@map("cortes_caja")
+}
+
+model CorteCajaDetalle {
+  id             String              @id @default(uuid())
+  corteId        String              @map("corte_id")
+  referenciaId   String              @map("referencia_id")
+  tipoReferencia TipoReferenciaCorte @map("tipo_referencia")
+  monto          Float
+  formaPago      String?             @map("forma_pago")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  corte          CorteCaja           @relation(fields: [corteId], references: [id], onDelete: Cascade)
+
+  @@index([corteId], map: "cortes_caja_detalles_corte_id_fkey")
+  @@map("cortes_caja_detalles")
+}
+
+model CorteCajaDeposito {
+  id                 String    @id @default(uuid())
+  corteId            String    @map("corte_id")
+  monto              Float
+  folio              String    @db.VarChar(255)
+  billetesRechazados Float     @default(0) @map("billetes_rechazados")
+  monedas            Float     @default(0) @map("monedas")
+  total              Float
+  createdAt          DateTime  @default(now()) @map("created_at")
+  corte              CorteCaja @relation(fields: [corteId], references: [id], onDelete: Cascade)
+
+  @@index([corteId], map: "cortes_caja_depositos_corte_id_fkey")
+  @@map("cortes_caja_depositos")
+}
+
+enum Rol {
+  superAdministrador
+  administrador
+  gestor
+  repartidor
+}
+
+enum Estado {
+  activo
+  inactivo
+}
+
+enum TipoRepartidor {
+  cilindros
+  pipas
+}
+
+enum EstadoSede {
+  activa
+  inactiva
+}
+
+enum TipoFormaPago {
+  efectivo
+  terminal
+  transferencia
+  cheque
+  deposito
+  credito
+}
+
+enum EstadoCliente {
+  activo
+  suspendido
+  inactivo
+}
+
+enum TipoDomicilio {
+  principal
+  facturacion
+  entrega
+  otro
+}
+
+enum EstadoPedido {
+  entregado
+  pendiente
+  cancelado
+  en_proceso
+}
+
+enum TipoServicio {
+  pipas
+  cilindros
+}
+
+enum EstadoNotaCredito {
+  vigente
+  por_vencer
+  vencida
+  pagada
+  cancelada
+}
+
+enum EstadoPago {
+  pendiente
+  autorizado
+  rechazado
+  cancelado
+}
+
+enum TipoPago {
+  nota_especifica
+  abono_general
+}
+
+enum TipoNewsletterItem {
+  image
+  notification
+}
+
+enum TamañoNewsletter {
+  small
+  medium
+  large
+}
+
+enum TipoPagoPedido {
+  metodo_pago
+  credito
+}
+
+enum TipoCorte {
+  venta_dia
+  abono
+}
+
+enum EstadoCorte {
+  pendiente
+  validado
+  rechazado
+}
+
+enum TipoReferenciaCorte {
+  pedido
+  abono
 }

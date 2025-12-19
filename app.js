@@ -26,6 +26,7 @@ const newsletterRoutes = require('./api/routes/newsletter.routes');
 const configuracionRoutes = require('./api/routes/configuracion.routes');
 const descuentoRepartidorRoutes = require('./api/routes/descuentoRepartidor.routes');
 const categoriaProductoRoutes = require('./api/routes/categoriaProducto.routes');
+const corteCajaRoutes = require('./api/routes/corteCaja.routes');
 
 // Inicialización de Express
 const app = express();
@@ -42,6 +43,9 @@ const corsOptions = {
     'http://localhost:3002',
     'http://localhost:3003',
     'http://localhost:3004',
+    // Permitir conexiones desde la red local (para Expo Go en dispositivos físicos)
+    /^http:\/\/192\.168\.\d+\.\d+:\d+$/, // Permite cualquier IP local (192.168.x.x)
+    /^http:\/\/10\.0\.2\.2:\d+$/, // Para emulador Android
     'https://konfio-front.vercel.app',
     'https://konfio-front-git-main-sergio-sanguinetti.vercel.app',
     'https://konfio-front-sergio-sanguinetti.vercel.app',
@@ -83,6 +87,8 @@ app.use('/api/newsletter', newsletterRoutes);
 app.use('/api/configuraciones', configuracionRoutes);
 app.use('/api/descuentos-repartidor', descuentoRepartidorRoutes);
 app.use('/api/categorias-producto', categoriaProductoRoutes);
+app.use('/api/cortes-caja', corteCajaRoutes);
+app.use('/api/ventas', corteCajaRoutes); // Alias para el sistema web
 
 // Middleware para manejar rutas no encontradas (404)
 app.use((req, res, next) => {

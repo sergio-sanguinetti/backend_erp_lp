@@ -7,6 +7,7 @@ const { validateRegistration } = require('../middlewares/validation.middleware')
 // Rutas públicas
 router.post('/register', validateRegistration, usuarioController.register);
 router.post('/login', usuarioController.login);
+router.post('/repartidor/login', usuarioController.loginRepartidor);
 
 // Ruta para el segundo paso del login (verificación 2FA)
 // Se protege para asegurar que se use un token temporal válido

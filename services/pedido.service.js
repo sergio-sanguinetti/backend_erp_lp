@@ -124,17 +124,36 @@ exports.getAllPedidos = async (filtros = {}) => {
     orderBy: { fechaCreacion: 'desc' }
   });
   
-  console.log('Pedidos encontrados en DB:', pedidos.length);
-  if (pedidos.length > 0) {
-    console.log('Primer pedido:', { id: pedidos[0].id, numeroPedido: pedidos[0].numeroPedido, sedeId: pedidos[0].sedeId });
+  // Parsear campos JSON que se guardan como string
+  const pedidosFormateados = pedidos.map(pedido => {
+    if (pedido.calculoPipas && typeof pedido.calculoPipas === 'string') {
+      try {
+        pedido.calculoPipas = JSON.parse(pedido.calculoPipas);
+      } catch (e) {
+        console.error('Error parsing calculoPipas:', e);
+      }
+    }
+    if (pedido.formasPago && typeof pedido.formasPago === 'string') {
+      try {
+        pedido.formasPago = JSON.parse(pedido.formasPago);
+      } catch (e) {
+        console.error('Error parsing formasPago:', e);
+      }
+    }
+    return pedido;
+  });
+  
+  console.log('Pedidos encontrados en DB:', pedidosFormateados.length);
+  if (pedidosFormateados.length > 0) {
+    console.log('Primer pedido:', { id: pedidosFormateados[0].id, numeroPedido: pedidosFormateados[0].numeroPedido, sedeId: pedidosFormateados[0].sedeId });
   }
   
-  return pedidos;
+  return pedidosFormateados;
 };
 
 // Obtener pedido por ID
 exports.findPedidoById = async (id) => {
-  return await prisma.pedido.findUnique({
+  const pedido = await prisma.pedido.findUnique({
     where: { id },
     include: {
       cliente: true,
@@ -148,6 +167,25 @@ exports.findPedidoById = async (id) => {
       }
     }
   });
+
+  if (pedido) {
+    if (pedido.calculoPipas && typeof pedido.calculoPipas === 'string') {
+      try {
+        pedido.calculoPipas = JSON.parse(pedido.calculoPipas);
+      } catch (e) {
+        console.error('Error parsing calculoPipas:', e);
+      }
+    }
+    if (pedido.formasPago && typeof pedido.formasPago === 'string') {
+      try {
+        pedido.formasPago = JSON.parse(pedido.formasPago);
+      } catch (e) {
+        console.error('Error parsing formasPago:', e);
+      }
+    }
+  }
+
+  return pedido;
 };
 
 // Crear nuevo pedido
@@ -204,7 +242,8 @@ exports.createPedido = async (pedidoData) => {
       tipoServicio: pedidoData.tipoServicio,
       repartidorId: pedidoData.repartidorId || null,
       observaciones: pedidoData.observaciones || null,
-      calculoPipas: pedidoData.calculoPipas || null,
+      calculoPipas: pedidoData.calculoPipas ? JSON.stringify(pedidoData.calculoPipas) : null,
+      formasPago: pedidoData.formasPago ? JSON.stringify(pedidoData.formasPago) : null,
       sedeId: pedidoData.sedeId || null,
       // Crear los productos del pedido
       productosPedido: pedidoData.productos ? {
@@ -295,6 +334,14 @@ exports.updatePedido = async (id, updateData) => {
   if (updateData.productos) {
     updateData.cantidadProductos = updateData.productos.length;
     updateData.ventaTotal = updateData.productos.reduce((sum, p) => sum + (p.precio * p.cantidad), 0);
+  }
+
+  // Stringify calculoPipas y formasPago si vienen como objetos
+  if (updateData.calculoPipas && typeof updateData.calculoPipas !== 'string') {
+    updateData.calculoPipas = JSON.stringify(updateData.calculoPipas);
+  }
+  if (updateData.formasPago && typeof updateData.formasPago !== 'string') {
+    updateData.formasPago = JSON.stringify(updateData.formasPago);
   }
   
   return await prisma.pedido.update({

@@ -85,6 +85,44 @@ exports.login = async (req, res, next) => {
     }
 };
 
+// Iniciar sesión para repartidores (solo usuarios con rol repartidor)
+exports.loginRepartidor = async (req, res, next) => {
+    const { email, password } = req.body;
+    if (!email || !password) {
+        return res.status(400).json({ message: 'Por favor, proporcione email y contraseña.' });
+    }
+
+    try {
+        const usuario = await usuarioService.findUsuarioByEmail(email);
+        if (!usuario || !(await usuarioService.comparePassword(password, usuario.password))) {
+            return res.status(401).json({ message: 'Credenciales inválidas.' });
+        }
+
+        // Verificar que el usuario tenga rol repartidor
+        if (usuario.rol !== 'repartidor') {
+            return res.status(403).json({ message: 'Acceso denegado. Solo usuarios con rol repartidor pueden acceder desde la aplicación móvil.' });
+        }
+
+        // Verificar que el usuario esté activo
+        if (usuario.estado !== 'activo') {
+            return res.status(403).json({ message: 'Tu cuenta está inactiva. Contacta al administrador.' });
+        }
+
+        // Los repartidores no usan 2FA en la app móvil, iniciar sesión directamente
+        const usuarioData = { ...usuario };
+        delete usuarioData.password;
+        delete usuarioData.twoFactorSecret;
+
+        res.status(200).json({
+            message: 'Inicio de sesión exitoso.',
+            token: generateToken(usuario),
+            usuario: usuarioData,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 // Iniciar sesión (Paso 2: Verificar token 2FA)
 exports.verifyLogin2FA = async (req, res, next) => {
     const { token2FA } = req.body;

@@ -134,6 +134,7 @@ exports.createPago = async (req, res, next) => {
   try {
     const pagoData = {
       clienteId: req.body.clienteId,
+      pedidoId: req.body.pedidoId, // Añadido para procesar pagos de pedidos
       notaCreditoId: req.body.notaCreditoId,
       montoTotal: req.body.montoTotal,
       tipo: req.body.tipo,
@@ -233,7 +234,7 @@ exports.getClientesCredito = async (req, res, next) => {
           creditoDisponible: cliente.limiteCredito - cliente.saldoActual,
           diasPromedioPago: await diasPromedioPago,
           estado,
-          notasPendientes: notas.filter(n => n.estado !== 'pagada')
+          notasPendientes: notas
         };
       })
     );

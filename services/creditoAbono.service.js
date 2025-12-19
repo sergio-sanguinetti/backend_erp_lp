@@ -53,7 +53,7 @@ exports.createNotaCredito = async (notaCreditoData) => {
     }
   });
 
-  // Actualizar saldo actual del cliente
+  // Actualizar saldo actual del cliente (INCREMENTAR DEUDA)
   await prisma.cliente.update({
     where: { id: notaCreditoData.clienteId },
     data: {
@@ -91,7 +91,7 @@ exports.getAllNotasCredito = async (filtros = {}) => {
     };
   }
 
-  return await prisma.notaCredito.findMany({
+  const notas = await prisma.notaCredito.findMany({
     where,
     include: {
       cliente: {
@@ -105,10 +105,23 @@ exports.getAllNotasCredito = async (filtros = {}) => {
       fechaVenta: 'desc'
     }
   });
+
+  // Parsear campos JSON en pedidos relacionados
+  return notas.map(nota => {
+    if (nota.pedido) {
+      if (nota.pedido.calculoPipas && typeof nota.pedido.calculoPipas === 'string') {
+        try { nota.pedido.calculoPipas = JSON.parse(nota.pedido.calculoPipas); } catch (e) {}
+      }
+      if (nota.pedido.formasPago && typeof nota.pedido.formasPago === 'string') {
+        try { nota.pedido.formasPago = JSON.parse(nota.pedido.formasPago); } catch (e) {}
+      }
+    }
+    return nota;
+  });
 };
 
 exports.getNotaCreditoById = async (id) => {
-  return await prisma.notaCredito.findUnique({
+  const nota = await prisma.notaCredito.findUnique({
     where: { id },
     include: {
       cliente: {
@@ -128,6 +141,17 @@ exports.getNotaCreditoById = async (id) => {
       }
     }
   });
+
+  if (nota && nota.pedido) {
+    if (nota.pedido.calculoPipas && typeof nota.pedido.calculoPipas === 'string') {
+      try { nota.pedido.calculoPipas = JSON.parse(nota.pedido.calculoPipas); } catch (e) {}
+    }
+    if (nota.pedido.formasPago && typeof nota.pedido.formasPago === 'string') {
+      try { nota.pedido.formasPago = JSON.parse(nota.pedido.formasPago); } catch (e) {}
+    }
+  }
+
+  return nota;
 };
 
 exports.updateNotaCredito = async (id, updateData) => {
@@ -201,7 +225,71 @@ exports.deleteNotaCredito = async (id) => {
   });
 };
 
-// ========== PAGOS ==========
+// ========== PAGOS (Abonos a Deuda) ==========
+
+const createNotaCreditoLocal = async (notaCreditoData) => {
+  // Verificar que el cliente existe
+  const cliente = await prisma.cliente.findUnique({
+    where: { id: notaCreditoData.clienteId }
+  });
+
+  if (!cliente) {
+    throw new Error('Cliente no encontrado.');
+  }
+
+  // Generar número de nota único
+  const numeroNota = await generarNumeroNota();
+
+  // Calcular días de vencimiento
+  const fechaVencimiento = new Date(notaCreditoData.fechaVencimiento);
+  const hoy = new Date();
+  const diasVencimiento = Math.floor((fechaVencimiento - hoy) / (1000 * 60 * 60 * 24));
+
+  // Determinar estado
+  let estado = 'vigente';
+  if (diasVencimiento < 0) {
+    estado = 'vencida';
+  } else if (diasVencimiento <= 7) {
+    estado = 'por_vencer';
+  }
+
+  const nuevaNotaCredito = await prisma.notaCredito.create({
+    data: {
+      numeroNota,
+      clienteId: notaCreditoData.clienteId,
+      pedidoId: notaCreditoData.pedidoId || null,
+      fechaVenta: new Date(notaCreditoData.fechaVenta),
+      fechaVencimiento: fechaVencimiento,
+      importe: notaCreditoData.importe,
+      saldoPendiente: notaCreditoData.importe,
+      diasVencimiento,
+      estado,
+      observaciones: notaCreditoData.observaciones || null
+    },
+    include: {
+      cliente: {
+        include: {
+          ruta: true
+        }
+      },
+      pedido: true
+    }
+  });
+
+  // Actualizar saldo actual del cliente (INCREMENTAR DEUDA)
+  await prisma.cliente.update({
+    where: { id: notaCreditoData.clienteId },
+    data: {
+      saldoActual: {
+        increment: notaCreditoData.importe
+      }
+    }
+  });
+
+  return nuevaNotaCredito;
+};
+
+exports.createNotaCredito = createNotaCreditoLocal;
 
 exports.createPago = async (pagoData) => {
   // Verificar que el cliente existe
@@ -213,73 +301,154 @@ exports.createPago = async (pagoData) => {
     throw new Error('Cliente no encontrado.');
   }
 
-  // Crear el pago
-  const nuevoPago = await prisma.pago.create({
-    data: {
-      clienteId: pagoData.clienteId,
-      notaCreditoId: pagoData.notaCreditoId || null,
-      montoTotal: pagoData.montoTotal,
-      tipo: pagoData.tipo,
-      fechaPago: new Date(pagoData.fechaPago),
-      horaPago: pagoData.horaPago,
-      observaciones: pagoData.observaciones || null,
-      usuarioRegistro: pagoData.usuarioRegistro,
-      usuarioAutorizacion: pagoData.usuarioAutorizacion || null,
-      estado: pagoData.estado || 'pendiente',
-      formasPago: {
-        create: pagoData.formasPago.map(fp => ({
-          formaPagoId: fp.formaPagoId,
-          monto: fp.monto,
-          referencia: fp.referencia || null,
-          banco: fp.banco || null
-        }))
-      }
-    },
-    include: {
-      cliente: {
-        include: {
-          ruta: true
-        }
-      },
-      notaCredito: true,
-      formasPago: {
-        include: {
-          formaPago: true
+  // SI ES UN PAGO DE PEDIDO (CERRAR VENTA)
+  if (pagoData.pedidoId) {
+    const pedido = await prisma.pedido.findUnique({
+      where: { id: pagoData.pedidoId }
+    });
+    if (!pedido) {
+      throw new Error('Pedido no encontrado.');
+    }
+
+    // 1. Registrar en la tabla pagos_pedidos (breakdown)
+    if (pagoData.formasPago && Array.isArray(pagoData.formasPago)) {
+      console.log('Procesando formas de pago para pedido:', pagoData.pedidoId);
+      for (const fp of pagoData.formasPago) {
+        console.log('Forma de pago:', fp);
+        // Registrar el pago del pedido
+        await prisma.pagoPedido.create({
+          data: {
+            pedidoId: pagoData.pedidoId,
+            monto: parseFloat(fp.monto),
+            folio: fp.referencia || null,
+            tipo: fp.tipo === 'credito' ? 'credito' : 'metodo_pago',
+            metodoId: fp.formaPagoId || null
+          }
+        });
+
+        // 2. Si es crédito, generar la Nota de Crédito (ESTO INCREMENTA LA DEUDA)
+        if (fp.tipo === 'credito') {
+          console.log('--- DETECTADO PAGO CON CRÉDITO ---');
+          console.log('Monto:', fp.monto);
+          console.log('ClienteId:', pagoData.clienteId);
+          await createNotaCreditoLocal({
+            clienteId: pagoData.clienteId,
+            pedidoId: pagoData.pedidoId,
+            fechaVenta: new Date(),
+            fechaVencimiento: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000), // 15 días por defecto
+            importe: parseFloat(fp.monto),
+            observaciones: `Crédito generado desde venta de pedido ${pedido.numeroPedido || pedido.id}`
+          });
+          console.log('--- NOTA DE CRÉDITO GENERADA EXITOSAMENTE ---');
         }
       }
     }
-  });
 
-  // Si el pago está autorizado, actualizar saldos
-  if (nuevoPago.estado === 'autorizado') {
-    // Actualizar saldo del cliente
-    await prisma.cliente.update({
-      where: { id: pagoData.clienteId },
+    // 3. Actualizar el pedido a entregado
+    return await prisma.pedido.update({
+      where: { id: pagoData.pedidoId },
       data: {
-        saldoActual: {
-          decrement: pagoData.montoTotal
+        estado: 'entregado',
+        montoPagado: pagoData.montoTotal,
+        formasPago: pagoData.formasPago ? JSON.stringify(pagoData.formasPago) : null
+      },
+      include: {
+        cliente: true
+      }
+    });
+  }
+
+  // SI ES UN ABONO GENERAL O PAGO A NOTA (Módulo Créditos y Abonos)
+    const nuevoPago = await prisma.pago.create({
+      data: {
+        clienteId: pagoData.clienteId,
+        notaCreditoId: pagoData.notaCreditoId || null,
+        montoTotal: pagoData.montoTotal,
+        tipo: pagoData.tipo,
+        fechaPago: new Date(pagoData.fechaPago),
+        horaPago: pagoData.horaPago,
+        observaciones: pagoData.observaciones || null,
+        usuarioRegistro: pagoData.usuarioRegistro,
+        usuarioAutorizacion: pagoData.usuarioAutorizacion || null,
+        estado: pagoData.estado || 'pendiente',
+        formasPago: {
+          create: (pagoData.formasPago || []).map(fp => ({
+            formaPagoId: fp.formaPagoId,
+            monto: fp.monto,
+            referencia: fp.referencia || null,
+            banco: fp.banco || null
+          }))
+        }
+      },
+      include: {
+        cliente: {
+          include: {
+            ruta: true
+          }
+        },
+        notaCredito: true,
+        formasPago: {
+          include: {
+            formaPago: true
+          }
         }
       }
     });
 
-    // Si es pago a nota específica, actualizar saldo pendiente
-    if (pagoData.notaCreditoId) {
-      const notaCredito = await prisma.notaCredito.findUnique({
-        where: { id: pagoData.notaCreditoId }
-      });
-
-      if (notaCredito) {
-        const nuevoSaldo = Math.max(0, notaCredito.saldoPendiente - pagoData.montoTotal);
-        const estado = nuevoSaldo === 0 ? 'pagada' : notaCredito.estado;
-
-        await prisma.notaCredito.update({
-          where: { id: pagoData.notaCreditoId },
-          data: {
-            saldoPendiente: nuevoSaldo,
-            estado
-          }
-        });
+    // REGISTRAR EN LA TABLA abonos_cliente (según requerimiento)
+    if (pagoData.formasPago && Array.isArray(pagoData.formasPago)) {
+      console.log('--- REGISTRANDO EN abonos_cliente ---');
+      for (const fp of pagoData.formasPago) {
+        try {
+          await prisma.abonoCliente.create({
+            data: {
+              clienteId: pagoData.clienteId,
+              monto: parseFloat(fp.monto),
+              fecha: new Date(pagoData.fechaPago),
+              formaPagoId: fp.formaPagoId,
+              folio: fp.referencia || null,
+              notaCreditoId: pagoData.notaCreditoId || null,
+              usuarioRegistro: pagoData.usuarioRegistro || 'APP_USER',
+              observaciones: pagoData.observaciones || null
+            }
+          });
+          console.log('Abono registrado en abonos_cliente para fp:', fp.formaPagoId);
+        } catch (error) {
+          console.error('ERROR al registrar en abonos_cliente:', error);
+          // Si falla esta tabla, el pago general ya se creó, pero lanzamos error para informar al usuario
+          throw new Error('El abono se creó pero falló el registro en abonos_cliente. Verifique la base de datos.');
+        }
       }
+    }
+
+  // RESTAR DE LA DEUDA INMEDIATAMENTE (al crear el abono)
+  // Restar del saldo actual del cliente
+  await prisma.cliente.update({
+    where: { id: pagoData.clienteId },
+    data: {
+      saldoActual: {
+        decrement: pagoData.montoTotal
+      }
+    }
+  });
+
+  // Si es pago a nota específica, actualizar saldo pendiente de la nota
+  if (pagoData.notaCreditoId) {
+    const notaCredito = await prisma.notaCredito.findUnique({
+      where: { id: pagoData.notaCreditoId }
+    });
+
+    if (notaCredito) {
+      const nuevoSaldo = Math.max(0, notaCredito.saldoPendiente - pagoData.montoTotal);
+      const estado = nuevoSaldo === 0 ? 'pagada' : notaCredito.estado;
+
+      await prisma.notaCredito.update({
+        where: { id: pagoData.notaCreditoId },
+        data: {
+          saldoPendiente: nuevoSaldo,
+          estado
+        }
+      });
     }
   }
 
@@ -595,4 +764,3 @@ exports.actualizarEstadosNotas = async () => {
     }
   }
 };
-
