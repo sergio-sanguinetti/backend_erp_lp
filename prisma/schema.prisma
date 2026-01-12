@@ -194,6 +194,7 @@ model Zona {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
   rutas         Ruta[]
+  clientes      Cliente[]
   municipio     Municipio @relation(fields: [municipioId], references: [id], onDelete: Cascade)
 
   @@index([municipioId], map: "zonas_municipio_id_fkey")
@@ -218,6 +219,7 @@ model Cliente {
   rfc                        String?                  @db.VarChar(20)
   curp                       String?                  @db.VarChar(20)
   rutaId                     String?                  @map("ruta_id")
+  zonaId                     String?                  @map("zona_id")
   limiteCredito              Float                    @default(0)
   saldoActual                Float                    @default(0)
   pagosEspecialesAutorizados Boolean                  @default(false)
@@ -228,6 +230,7 @@ model Cliente {
   updatedAt                  DateTime                 @updatedAt @map("updated_at")
   abonos                     AbonoCliente[]
   ruta                       Ruta?                    @relation(fields: [rutaId], references: [id])
+  zona                       Zona?                    @relation(fields: [zonaId], references: [id])
   domicilios                 Domicilio[]
   historialLimiteCredito     HistorialLimiteCredito[]
   notasCredito               NotaCredito[]
@@ -235,6 +238,7 @@ model Cliente {
   pedidos                    Pedido[]
 
   @@index([rutaId], map: "clientes_ruta_id_fkey")
+  @@index([zonaId], map: "clientes_zona_id_fkey")
   @@map("clientes")
 }
 
@@ -250,6 +254,8 @@ model Domicilio {
   estado          String        @db.VarChar(100)
   codigoPostal    String        @db.VarChar(10)
   referencia      String?       @db.VarChar(500)
+  latitud         Float?        @db.Double
+  longitud        Float?        @db.Double
   activo          Boolean       @default(true)
   codigoQR        String        @unique @db.VarChar(50)
   fechaCreacionQR DateTime      @default(now()) @map("fecha_creacion_qr")

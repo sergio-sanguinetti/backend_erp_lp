@@ -63,3 +63,27 @@ exports.getCorteCilindros = async (req, res) => {
   }
 };
 
+exports.validateCorte = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { estado, observaciones, validaciones } = req.body;
+    
+    const corte = await corteCajaService.validateCorte(id, {
+      estado,
+      observaciones,
+      validaciones
+    });
+    
+    res.json(corte);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+
+
+
+
+
+
+

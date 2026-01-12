@@ -140,15 +140,22 @@ exports.deleteTipoFormaPago = async (id) => {
     throw error
   }
 
+  // Valores válidos del enum TipoFormaPago
+  const TIPOS_FORMAPAGO_VALIDOS = ['efectivo', 'terminal', 'transferencia', 'cheque', 'deposito', 'credito']
+  
   // Verificar si hay formas de pago usando este tipo
-  const formasPagoConTipo = await prisma.formaPago.findFirst({
-    where: { tipo: tipoExistente.codigo }
-  })
+  // Solo verificar si el código del tipo coincide con un valor válido del enum
+  const codigoTipo = tipoExistente.codigo.toLowerCase()
+  if (TIPOS_FORMAPAGO_VALIDOS.includes(codigoTipo)) {
+    const formasPagoConTipo = await prisma.formaPago.findFirst({
+      where: { tipo: codigoTipo }
+    })
 
-  if (formasPagoConTipo) {
-    const error = new Error('No se puede eliminar este tipo porque está siendo usado por una o más formas de pago.')
-    error.status = 400
-    throw error
+    if (formasPagoConTipo) {
+      const error = new Error('No se puede eliminar este tipo porque está siendo usado por una o más formas de pago.')
+      error.status = 400
+      throw error
+    }
   }
 
   return await prisma.tipoFormaPagoConfig.delete({

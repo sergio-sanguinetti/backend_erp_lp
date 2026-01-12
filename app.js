@@ -27,6 +27,8 @@ const configuracionRoutes = require('./api/routes/configuracion.routes');
 const descuentoRepartidorRoutes = require('./api/routes/descuentoRepartidor.routes');
 const categoriaProductoRoutes = require('./api/routes/categoriaProducto.routes');
 const corteCajaRoutes = require('./api/routes/corteCaja.routes');
+const reporteRoutes = require('./api/routes/reporte.routes');
+const reporteFinancieroRoutes = require('./api/routes/reporteFinanciero.routes');
 
 // Inicialización de Express
 const app = express();
@@ -89,6 +91,8 @@ app.use('/api/descuentos-repartidor', descuentoRepartidorRoutes);
 app.use('/api/categorias-producto', categoriaProductoRoutes);
 app.use('/api/cortes-caja', corteCajaRoutes);
 app.use('/api/ventas', corteCajaRoutes); // Alias para el sistema web
+app.use('/api/reportes', reporteRoutes);
+app.use('/api/reportes-financieros', reporteFinancieroRoutes);
 
 // Middleware para manejar rutas no encontradas (404)
 app.use((req, res, next) => {

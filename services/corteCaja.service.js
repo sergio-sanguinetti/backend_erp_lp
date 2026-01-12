@@ -221,7 +221,41 @@ class CorteCajaService {
 
     return resumen;
   }
+
+  async validateCorte(corteId, data) {
+    const { estado, observaciones, validaciones } = data;
+
+    // Verificar que el corte existe
+    const corte = await prisma.corteCaja.findUnique({
+      where: { id: corteId }
+    });
+
+    if (!corte) {
+      throw new Error('Corte no encontrado');
+    }
+
+    // Actualizar el estado del corte
+    return await prisma.corteCaja.update({
+      where: { id: corteId },
+      data: {
+        estado: estado || 'validado',
+        observaciones: observaciones || corte.observaciones
+      },
+      include: {
+        repartidor: true,
+        depositos: true,
+        detalles: true
+      }
+    });
+  }
 }
 
 module.exports = new CorteCajaService();
+
+
+
+
+
+
+
 

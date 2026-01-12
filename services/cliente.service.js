@@ -48,6 +48,7 @@ exports.createCliente = async (clienteData) => {
             rfc: (clienteData.rfc && clienteData.rfc.trim() !== '') ? clienteData.rfc : null,
             curp: (clienteData.curp && clienteData.curp.trim() !== '') ? clienteData.curp : null,
             rutaId: clienteData.rutaId || null,
+            zonaId: clienteData.zonaId || null,
             limiteCredito: clienteData.limiteCredito || 0,
             saldoActual: clienteData.saldoActual || 0,
             pagosEspecialesAutorizados: clienteData.pagosEspecialesAutorizados || false,
@@ -74,6 +75,8 @@ exports.createCliente = async (clienteData) => {
                     estado: domicilio.estado,
                     codigoPostal: domicilio.codigoPostal,
                     referencia: domicilio.referencia || null,
+                    latitud: domicilio.latitud !== undefined ? domicilio.latitud : null,
+                    longitud: domicilio.longitud !== undefined ? domicilio.longitud : null,
                     activo: domicilio.activo !== undefined ? domicilio.activo : true,
                     codigoQR: codigoQR
                 }
@@ -86,6 +89,7 @@ exports.createCliente = async (clienteData) => {
         where: { id: nuevoCliente.id },
         include: {
             ruta: true,
+            zona: true,
             domicilios: true
         }
     });
@@ -106,6 +110,7 @@ exports.findClienteById = async (id) => {
         where: { id },
         include: {
             ruta: true,
+            zona: true,
             domicilios: true
         }
     });
@@ -144,12 +149,35 @@ exports.getAllClientes = async (filtros = {}) => {
         where.rutaId = filtros.rutaId;
     }
 
+    // Filtrar por sede: buscar clientes cuyas rutas pertenezcan a la sede
+    if (filtros.sedeId) {
+        // Buscar todas las rutas de la sede
+        const rutasDeSede = await prisma.ruta.findMany({
+            where: { sedeId: filtros.sedeId },
+            select: { id: true }
+        });
+        
+        const rutasIds = rutasDeSede.map(r => r.id);
+        
+        if (rutasIds.length > 0) {
+            where.rutaId = { in: rutasIds };
+        } else {
+            // Si no hay rutas para esta sede, retornar array vacío
+            return [];
+        }
+    }
+
     // Manejar el caso donde email puede ser null en la BD pero el schema espera String
     try {
         const clientes = await prisma.cliente.findMany({
             where,
             include: {
-                ruta: true,
+                ruta: {
+                    include: {
+                        sede: true
+                    }
+                },
+                zona: true,
                 domicilios: {
                     where: { activo: true }
                 }
@@ -224,6 +252,20 @@ exports.updateCliente = async (id, updateData) => {
             ? updateData.curp 
             : null;
     }
+    
+    // Normalizar rutaId: convertir strings vacíos, undefined, o null a null
+    if (updateData.rutaId !== undefined) {
+        updateData.rutaId = (updateData.rutaId && typeof updateData.rutaId === 'string' && updateData.rutaId.trim() !== '') 
+            ? updateData.rutaId.trim() 
+            : null;
+    }
+    
+    // Normalizar zonaId: convertir strings vacíos, undefined, o null a null
+    if (updateData.zonaId !== undefined) {
+        updateData.zonaId = (updateData.zonaId && typeof updateData.zonaId === 'string' && updateData.zonaId.trim() !== '') 
+            ? updateData.zonaId.trim() 
+            : null;
+    }
 
     // Actualizar el cliente
     const clienteActualizado = await prisma.cliente.update({
@@ -231,6 +273,7 @@ exports.updateCliente = async (id, updateData) => {
         data: updateData,
         include: {
             ruta: true,
+            zona: true,
             domicilios: true
         }
     });
@@ -286,6 +329,8 @@ exports.createDomicilio = async (clienteId, domicilioData) => {
             estado: domicilioData.estado,
             codigoPostal: domicilioData.codigoPostal,
             referencia: domicilioData.referencia || null,
+            latitud: domicilioData.latitud !== undefined ? domicilioData.latitud : null,
+            longitud: domicilioData.longitud !== undefined ? domicilioData.longitud : null,
             activo: domicilioData.activo !== undefined ? domicilioData.activo : true,
             codigoQR: codigoQR
         }

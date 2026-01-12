@@ -74,7 +74,37 @@ exports.getAllPedidos = async (filtros = {}) => {
           apellidoPaterno: true,
           apellidoMaterno: true,
           email: true,
-          telefono: true
+          telefono: true,
+          calle: true,
+          numeroExterior: true,
+          numeroInterior: true,
+          colonia: true,
+          municipio: true,
+          estado: true,
+          codigoPostal: true,
+          domicilios: {
+            where: {
+              activo: {
+                not: false
+              }
+            },
+            select: {
+              id: true,
+              tipo: true,
+              calle: true,
+              numeroExterior: true,
+              numeroInterior: true,
+              colonia: true,
+              municipio: true,
+              estado: true,
+              codigoPostal: true,
+              referencia: true,
+              latitud: true,
+              longitud: true,
+              activo: true,
+              codigoQR: true
+            }
+          }
         }
       },
       ruta: {
@@ -227,7 +257,20 @@ exports.createPedido = async (pedidoData) => {
   
   // Calcular totales
   const cantidadProductos = pedidoData.productos?.length || 0;
-  const ventaTotal = pedidoData.productos?.reduce((sum, p) => sum + (p.precio * p.cantidad), 0) || 0;
+  // Usar subtotal si está disponible, sino calcular desde precio * cantidad
+  const ventaTotal = pedidoData.productos?.reduce((sum, p) => {
+    if (p.subtotal !== undefined && p.subtotal !== null) {
+      return sum + parseFloat(p.subtotal);
+    }
+    const precio = parseFloat(p.precio || 0);
+    const cantidad = parseFloat(p.cantidad || 0);
+    return sum + (precio * cantidad);
+  }, 0) || 0;
+  
+  // Si se proporciona totalMonto explícitamente, usarlo (tiene prioridad)
+  const ventaTotalFinal = pedidoData.totalMonto !== undefined && pedidoData.totalMonto !== null 
+    ? parseFloat(pedidoData.totalMonto) 
+    : ventaTotal;
 
   const nuevoPedido = await prisma.pedido.create({
     data: {
@@ -238,7 +281,7 @@ exports.createPedido = async (pedidoData) => {
       horaPedido: pedidoData.horaPedido || new Date().toTimeString().slice(0, 5),
       estado: 'pendiente',
       cantidadProductos,
-      ventaTotal,
+      ventaTotal: ventaTotalFinal,
       tipoServicio: pedidoData.tipoServicio,
       repartidorId: pedidoData.repartidorId || null,
       observaciones: pedidoData.observaciones || null,
