@@ -26,7 +26,6 @@ const newsletterRoutes = require('./api/routes/newsletter.routes');
 const configuracionRoutes = require('./api/routes/configuracion.routes');
 const descuentoRepartidorRoutes = require('./api/routes/descuentoRepartidor.routes');
 const categoriaProductoRoutes = require('./api/routes/categoriaProducto.routes');
-const corteCajaRoutes = require('./api/routes/corteCaja.routes');
 const reporteRoutes = require('./api/routes/reporte.routes');
 const reporteFinancieroRoutes = require('./api/routes/reporteFinanciero.routes');
 
@@ -89,8 +88,6 @@ app.use('/api/newsletter', newsletterRoutes);
 app.use('/api/configuraciones', configuracionRoutes);
 app.use('/api/descuentos-repartidor', descuentoRepartidorRoutes);
 app.use('/api/categorias-producto', categoriaProductoRoutes);
-app.use('/api/cortes-caja', corteCajaRoutes);
-app.use('/api/ventas', corteCajaRoutes); // Alias para el sistema web
 app.use('/api/reportes', reporteRoutes);
 app.use('/api/reportes-financieros', reporteFinancieroRoutes);
 

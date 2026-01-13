@@ -1,129 +1,134 @@
 const reporteFinancieroService = require('../../services/reporteFinanciero.service');
 
-// Antigüedad de Cartera
-exports.getAntiguedadCartera = async (req, res, next) => {
+exports.getAntiguedadCartera = async (req, res) => {
   try {
-    const antiguedad = await reporteFinancieroService.getAntiguedadCartera();
-    res.status(200).json(antiguedad);
+    const { sedeId } = req.query;
+    const antiguedad = await reporteFinancieroService.getAntiguedadCartera(sedeId);
+    res.json(antiguedad);
   } catch (error) {
-    next(error);
+    console.error('Error al obtener antigüedad de cartera:', error);
+    res.status(500).json({ message: 'Error al obtener antigüedad de cartera', error: error.message });
   }
 };
 
-// Top Mejores Pagadores
-exports.getTopMejoresPagadores = async (req, res, next) => {
+exports.getTopMejoresPagadores = async (req, res) => {
   try {
-    const limite = parseInt(req.query.limite) || 10;
-    const mejores = await reporteFinancieroService.getTopMejoresPagadores(limite);
-    res.status(200).json(mejores);
+    const { limite = 10, sedeId } = req.query;
+    const mejores = await reporteFinancieroService.getTopMejoresPagadores(parseInt(limite), sedeId);
+    res.json(mejores);
   } catch (error) {
-    next(error);
+    console.error('Error al obtener top mejores pagadores:', error);
+    res.status(500).json({ message: 'Error al obtener top mejores pagadores', error: error.message });
   }
 };
 
-// Top Peores Pagadores
-exports.getTopPeoresPagadores = async (req, res, next) => {
+exports.getTopPeoresPagadores = async (req, res) => {
   try {
-    const limite = parseInt(req.query.limite) || 10;
-    const peores = await reporteFinancieroService.getTopPeoresPagadores(limite);
-    res.status(200).json(peores);
+    const { limite = 10, sedeId } = req.query;
+    const peores = await reporteFinancieroService.getTopPeoresPagadores(parseInt(limite), sedeId);
+    res.json(peores);
   } catch (error) {
-    next(error);
+    console.error('Error al obtener top peores pagadores:', error);
+    res.status(500).json({ message: 'Error al obtener top peores pagadores', error: error.message });
   }
 };
 
-// Análisis de Riesgo
-exports.getAnalisisRiesgo = async (req, res, next) => {
+exports.getAnalisisRiesgo = async (req, res) => {
   try {
-    const analisis = await reporteFinancieroService.getAnalisisRiesgo();
-    res.status(200).json(analisis);
+    const { sedeId } = req.query;
+    const analisis = await reporteFinancieroService.getAnalisisRiesgo(sedeId);
+    res.json(analisis);
   } catch (error) {
-    next(error);
+    console.error('Error al obtener análisis de riesgo:', error);
+    res.status(500).json({ message: 'Error al obtener análisis de riesgo', error: error.message });
   }
 };
 
-// Clientes para Visita de Cobranza
-exports.getClientesVisitaCobranza = async (req, res, next) => {
+exports.getClientesParaVisitaCobranza = async (req, res) => {
   try {
-    const rutaId = req.query.rutaId || null;
-    const clientes = await reporteFinancieroService.getClientesVisitaCobranza(rutaId);
-    res.status(200).json(clientes);
+    const { rutaId, sedeId } = req.query;
+    const clientes = await reporteFinancieroService.getClientesParaVisitaCobranza(rutaId, sedeId);
+    res.json(clientes);
   } catch (error) {
-    next(error);
+    console.error('Error al obtener clientes para visita de cobranza:', error);
+    res.status(500).json({ message: 'Error al obtener clientes para visita de cobranza', error: error.message });
   }
 };
 
-// Recordatorios por Enviar
-exports.getRecordatoriosPorEnviar = async (req, res, next) => {
+exports.getRecordatoriosPorEnviar = async (req, res) => {
   try {
-    const recordatorios = await reporteFinancieroService.getRecordatoriosPorEnviar();
-    res.status(200).json(recordatorios);
+    const { sedeId } = req.query;
+    const recordatorios = await reporteFinancieroService.getRecordatoriosPorEnviar(sedeId);
+    res.json(recordatorios);
   } catch (error) {
-    next(error);
+    console.error('Error al obtener recordatorios por enviar:', error);
+    res.status(500).json({ message: 'Error al obtener recordatorios por enviar', error: error.message });
   }
 };
 
-// Transferencias Pendientes
-exports.getTransferenciasPendientes = async (req, res, next) => {
+exports.getTransferenciasPendientesConfirmacion = async (req, res) => {
   try {
-    const transferencias = await reporteFinancieroService.getTransferenciasPendientes();
-    res.status(200).json(transferencias);
+    const { sedeId } = req.query;
+    const transferencias = await reporteFinancieroService.getTransferenciasPendientesConfirmacion(sedeId);
+    res.json(transferencias);
   } catch (error) {
-    next(error);
+    console.error('Error al obtener transferencias pendientes:', error);
+    res.status(500).json({ message: 'Error al obtener transferencias pendientes', error: error.message });
   }
 };
 
-// Clientes con Límite Excedido
-exports.getClientesLimiteExcedido = async (req, res, next) => {
+exports.getClientesConLimiteExcedido = async (req, res) => {
   try {
-    const clientes = await reporteFinancieroService.getClientesLimiteExcedido();
-    res.status(200).json(clientes);
+    const { sedeId } = req.query;
+    const clientes = await reporteFinancieroService.getClientesConLimiteExcedido(sedeId);
+    res.json(clientes);
   } catch (error) {
-    next(error);
+    console.error('Error al obtener clientes con límite excedido:', error);
+    res.status(500).json({ message: 'Error al obtener clientes con límite excedido', error: error.message });
   }
 };
 
-// Comparativo Cartera vs Ventas
-exports.getComparativoCarteraVentas = async (req, res, next) => {
+exports.getComparativoCarteraVentas = async (req, res) => {
   try {
-    const { fechaDesde, fechaHasta } = req.query;
-    const comparativo = await reporteFinancieroService.getComparativoCarteraVentas(fechaDesde, fechaHasta);
-    res.status(200).json(comparativo);
+    const { fechaDesde, fechaHasta, sedeId } = req.query;
+    const comparativo = await reporteFinancieroService.getComparativoCarteraVentas(fechaDesde, fechaHasta, sedeId);
+    res.json(comparativo);
   } catch (error) {
-    next(error);
+    console.error('Error al obtener comparativo cartera vs ventas:', error);
+    res.status(500).json({ message: 'Error al obtener comparativo cartera vs ventas', error: error.message });
   }
 };
 
-// Eficiencia de Cobranza por Repartidor
-exports.getEficienciaCobranzaRepartidor = async (req, res, next) => {
+exports.getEficienciaCobranzaPorRepartidor = async (req, res) => {
   try {
-    const { fechaDesde, fechaHasta } = req.query;
-    const eficiencia = await reporteFinancieroService.getEficienciaCobranzaRepartidor(fechaDesde, fechaHasta);
-    res.status(200).json(eficiencia);
+    const { fechaDesde, fechaHasta, sedeId } = req.query;
+    const eficiencia = await reporteFinancieroService.getEficienciaCobranzaPorRepartidor(fechaDesde, fechaHasta, sedeId);
+    res.json(eficiencia);
   } catch (error) {
-    next(error);
+    console.error('Error al obtener eficiencia de cobranza:', error);
+    res.status(500).json({ message: 'Error al obtener eficiencia de cobranza', error: error.message });
   }
 };
 
-// Tendencias de Pago
-exports.getTendenciasPago = async (req, res, next) => {
+exports.getAnalisisTendenciasPago = async (req, res) => {
   try {
-    const meses = parseInt(req.query.meses) || 12;
-    const tendencias = await reporteFinancieroService.getTendenciasPago(meses);
-    res.status(200).json(tendencias);
+    const { fechaDesde, fechaHasta, sedeId } = req.query;
+    const tendencias = await reporteFinancieroService.getAnalisisTendenciasPago(fechaDesde, fechaHasta, sedeId);
+    res.json(tendencias);
   } catch (error) {
-    next(error);
+    console.error('Error al obtener análisis de tendencias de pago:', error);
+    res.status(500).json({ message: 'Error al obtener análisis de tendencias de pago', error: error.message });
   }
 };
 
-// Proyección de Flujo de Caja
-exports.getProyeccionFlujoCaja = async (req, res, next) => {
+exports.getProyeccionFlujoCaja = async (req, res) => {
   try {
-    const meses = parseInt(req.query.meses) || 6;
-    const proyeccion = await reporteFinancieroService.getProyeccionFlujoCaja(meses);
-    res.status(200).json(proyeccion);
+    const { sedeId } = req.query;
+    const proyeccion = await reporteFinancieroService.getProyeccionFlujoCaja(sedeId);
+    res.json(proyeccion);
   } catch (error) {
-    next(error);
+    console.error('Error al obtener proyección de flujo de caja:', error);
+    res.status(500).json({ message: 'Error al obtener proyección de flujo de caja', error: error.message });
   }
 };
 

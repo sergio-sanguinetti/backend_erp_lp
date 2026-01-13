@@ -1,219 +1,229 @@
 const { prisma } = require('../config/database');
 
-// Obtener ventas por mes
-exports.getVentasPorMes = async (fechaDesde, fechaHasta) => {
+// Ventas por mes
+exports.getVentasPorMes = async (fechaDesde, fechaHasta, sedeId) => {
   const where = {
-    estado: 'entregado'
+    estado: 'entregado',
   };
 
   if (fechaDesde) {
     where.fechaPedido = {
       ...where.fechaPedido,
-      gte: new Date(fechaDesde)
+      gte: new Date(fechaDesde),
     };
   }
-
   if (fechaHasta) {
     where.fechaPedido = {
       ...where.fechaPedido,
-      lte: new Date(fechaHasta)
+      lte: new Date(fechaHasta),
     };
   }
+  if (sedeId) {
+    where.sedeId = sedeId;
+  }
 
-  const pedidos = await prisma.pedido.findMany({
+  const ventas = await prisma.pedido.findMany({
     where,
     select: {
       fechaPedido: true,
-      ventaTotal: true
-    }
+      ventaTotal: true,
+    },
   });
 
   // Agrupar por mes
   const ventasPorMes = {};
-  pedidos.forEach(pedido => {
-    const fecha = new Date(pedido.fechaPedido);
+  ventas.forEach((venta) => {
+    const fecha = new Date(venta.fechaPedido);
     const mes = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
-    const mesNombre = fecha.toLocaleString('es-MX', { month: 'long', year: 'numeric' });
+    const nombreMes = fecha.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
     
     if (!ventasPorMes[mes]) {
       ventasPorMes[mes] = {
-        mes,
-        mesNombre,
+        mes: nombreMes,
         total: 0,
-        cantidad: 0
+        cantidad: 0,
       };
     }
-    ventasPorMes[mes].total += pedido.ventaTotal;
+    ventasPorMes[mes].total += parseFloat(venta.ventaTotal) || 0;
     ventasPorMes[mes].cantidad += 1;
   });
 
-  return Object.values(ventasPorMes).sort((a, b) => a.mes.localeCompare(b.mes));
+  return Object.values(ventasPorMes).sort((a, b) => {
+    const fechaA = new Date(a.mes);
+    const fechaB = new Date(b.mes);
+    return fechaA - fechaB;
+  });
 };
 
-// Obtener cortes por mes
-exports.getCortesPorMes = async (fechaDesde, fechaHasta) => {
+// Cortes por mes
+exports.getCortesPorMes = async (fechaDesde, fechaHasta, sedeId) => {
   const where = {};
 
-  if (fechaDesde) {
-    where.fecha = {
-      ...where.fecha,
-      gte: new Date(fechaDesde)
-    };
-  }
-
-  if (fechaHasta) {
-    where.fecha = {
-      ...where.fecha,
-      lte: new Date(fechaHasta)
-    };
+  if (fechaDesde || fechaHasta) {
+    where.fecha = {};
+    if (fechaDesde) {
+      where.fecha.gte = new Date(fechaDesde);
+    }
+    if (fechaHasta) {
+      where.fecha.lte = new Date(fechaHasta);
+    }
   }
 
   const cortes = await prisma.corteCaja.findMany({
     where,
-    select: {
-      fecha: true,
-      tipo: true,
-      estado: true
-    }
+    include: {
+      repartidor: {
+        select: {
+          sede: true,
+        },
+      },
+    },
   });
+
+  // Filtrar por sede si se especifica
+  let cortesFiltrados = cortes;
+  if (sedeId) {
+    cortesFiltrados = cortes.filter((corte) => corte.repartidor?.sede === sedeId);
+  }
 
   // Agrupar por mes
   const cortesPorMes = {};
-  cortes.forEach(corte => {
+  cortesFiltrados.forEach((corte) => {
     const fecha = new Date(corte.fecha);
     const mes = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
-    const mesNombre = fecha.toLocaleString('es-MX', { month: 'long', year: 'numeric' });
+    const nombreMes = fecha.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
     
     if (!cortesPorMes[mes]) {
       cortesPorMes[mes] = {
-        mes,
-        mesNombre,
+        mes: nombreMes,
         cantidad: 0,
-        validados: 0,
-        pendientes: 0
+        totalVentas: 0,
+        totalAbonos: 0,
+        totalEfectivo: 0,
       };
     }
     cortesPorMes[mes].cantidad += 1;
-    if (corte.estado === 'validado') {
-      cortesPorMes[mes].validados += 1;
-    } else if (corte.estado === 'pendiente') {
-      cortesPorMes[mes].pendientes += 1;
-    }
+    cortesPorMes[mes].totalVentas += parseFloat(corte.totalVentas) || 0;
+    cortesPorMes[mes].totalAbonos += parseFloat(corte.totalAbonos) || 0;
+    cortesPorMes[mes].totalEfectivo += parseFloat(corte.totalEfectivo) || 0;
   });
 
-  return Object.values(cortesPorMes).sort((a, b) => a.mes.localeCompare(b.mes));
+  return Object.values(cortesPorMes).sort((a, b) => {
+    const fechaA = new Date(a.mes);
+    const fechaB = new Date(b.mes);
+    return fechaA - fechaB;
+  });
 };
 
-// Obtener cantidad de dinero entregado por cortes por mes
-exports.getDineroEntregadoPorCortes = async (fechaDesde, fechaHasta) => {
-  const where = {
-    estado: 'validado'
-  };
+// Dinero entregado por cortes por mes
+exports.getDineroEntregadoPorCortes = async (fechaDesde, fechaHasta, sedeId) => {
+  const where = {};
 
-  if (fechaDesde) {
-    where.fecha = {
-      ...where.fecha,
-      gte: new Date(fechaDesde)
-    };
-  }
-
-  if (fechaHasta) {
-    where.fecha = {
-      ...where.fecha,
-      lte: new Date(fechaHasta)
-    };
+  if (fechaDesde || fechaHasta) {
+    where.fecha = {};
+    if (fechaDesde) {
+      where.fecha.gte = new Date(fechaDesde);
+    }
+    if (fechaHasta) {
+      where.fecha.lte = new Date(fechaHasta);
+    }
   }
 
   const cortes = await prisma.corteCaja.findMany({
     where,
-    select: {
-      fecha: true,
-      totalVentas: true,
-      totalAbonos: true,
-      totalEfectivo: true,
-      totalOtros: true
-    }
+    include: {
+      repartidor: {
+        select: {
+          sede: true,
+        },
+      },
+      depositos: true,
+    },
   });
+
+  // Filtrar por sede si se especifica
+  let cortesFiltrados = cortes;
+  if (sedeId) {
+    cortesFiltrados = cortes.filter((corte) => corte.repartidor?.sede === sedeId);
+  }
 
   // Agrupar por mes
   const dineroPorMes = {};
-  cortes.forEach(corte => {
+  cortesFiltrados.forEach((corte) => {
     const fecha = new Date(corte.fecha);
     const mes = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
-    const mesNombre = fecha.toLocaleString('es-MX', { month: 'long', year: 'numeric' });
-    const total = (corte.totalVentas || 0) + (corte.totalAbonos || 0);
+    const nombreMes = fecha.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
     
     if (!dineroPorMes[mes]) {
       dineroPorMes[mes] = {
-        mes,
-        mesNombre,
-        total: 0,
-        totalVentas: 0,
-        totalAbonos: 0,
-        totalEfectivo: 0,
-        totalOtros: 0
+        mes: nombreMes,
+        totalEntregado: 0,
+        cantidadCortes: 0,
       };
     }
-    dineroPorMes[mes].total += total;
-    dineroPorMes[mes].totalVentas += corte.totalVentas || 0;
-    dineroPorMes[mes].totalAbonos += corte.totalAbonos || 0;
-    dineroPorMes[mes].totalEfectivo += corte.totalEfectivo || 0;
-    dineroPorMes[mes].totalOtros += corte.totalOtros || 0;
+    
+    const totalDepositos = corte.depositos.reduce((sum, dep) => sum + (parseFloat(dep.total) || 0), 0);
+    dineroPorMes[mes].totalEntregado += totalDepositos;
+    dineroPorMes[mes].cantidadCortes += 1;
   });
 
-  return Object.values(dineroPorMes).sort((a, b) => a.mes.localeCompare(b.mes));
+  return Object.values(dineroPorMes).sort((a, b) => {
+    const fechaA = new Date(a.mes);
+    const fechaB = new Date(b.mes);
+    return fechaA - fechaB;
+  });
 };
 
-// Obtener cantidad de clientes por zona
-exports.getClientesPorZona = async () => {
+// Clientes por zona
+exports.getClientesPorZona = async (sedeId) => {
+  const where = {};
+  
+  if (sedeId) {
+    // Filtrar por sede a través de la ruta
+    where.ruta = {
+      sedeId: sedeId,
+    };
+  }
+
   const clientes = await prisma.cliente.findMany({
-    where: {
-      estadoCliente: 'activo'
-    },
+    where,
     include: {
       zona: {
         select: {
           id: true,
-          nombre: true
-        }
-      }
-    }
+          nombre: true,
+        },
+      },
+    },
   });
 
   // Agrupar por zona
   const clientesPorZona = {};
-  clientes.forEach(cliente => {
-    const zonaId = cliente.zonaId || 'sin-zona';
-    const zonaNombre = cliente.zona?.nombre || 'Sin Zona';
+  clientes.forEach((cliente) => {
+    const zonaNombre = cliente.zona?.nombre || 'Sin zona';
+    const zonaId = cliente.zona?.id || 'sin-zona';
     
     if (!clientesPorZona[zonaId]) {
       clientesPorZona[zonaId] = {
-        zonaId,
-        zonaNombre,
-        cantidad: 0
+        zona: zonaNombre,
+        cantidad: 0,
       };
     }
     clientesPorZona[zonaId].cantidad += 1;
   });
 
-  return Object.values(clientesPorZona).sort((a, b) => b.cantidad - a.cantidad);
+  return Object.values(clientesPorZona);
 };
 
-// Obtener estadísticas de créditos
-exports.getEstadisticasCreditos = async (fechaDesde, fechaHasta) => {
+// Estadísticas de créditos
+exports.getEstadisticasCreditos = async (sedeId) => {
   const where = {};
-
-  if (fechaDesde) {
-    where.fechaVenta = {
-      ...where.fechaVenta,
-      gte: new Date(fechaDesde)
-    };
-  }
-
-  if (fechaHasta) {
-    where.fechaVenta = {
-      ...where.fechaVenta,
-      lte: new Date(fechaHasta)
+  
+  if (sedeId) {
+    where.cliente = {
+      ruta: {
+        sedeId: sedeId,
+      },
     };
   }
 
@@ -221,50 +231,58 @@ exports.getEstadisticasCreditos = async (fechaDesde, fechaHasta) => {
     where,
     select: {
       estado: true,
-      importe: true,
-      saldoPendiente: true
-    }
+      saldoPendiente: true,
+    },
   });
 
   const estadisticas = {
     activos: 0,
     pagados: 0,
     deuda: 0,
-    totalImporte: 0,
-    totalSaldoPendiente: 0
+    totalNotas: notasCredito.length,
+    montoTotal: 0,
   };
 
-  notasCredito.forEach(nota => {
-    if (nota.estado === 'vigente' || nota.estado === 'por_vencer' || nota.estado === 'vencida') {
-      estadisticas.activos += 1;
-    }
+  notasCredito.forEach((nota) => {
+    const saldo = parseFloat(nota.saldoPendiente) || 0;
+    estadisticas.montoTotal += saldo;
+
     if (nota.estado === 'pagada') {
       estadisticas.pagados += 1;
+    } else if (nota.estado === 'vigente' || nota.estado === 'por_vencer') {
+      estadisticas.activos += 1;
+      estadisticas.deuda += saldo;
+    } else if (nota.estado === 'vencida') {
+      estadisticas.activos += 1;
+      estadisticas.deuda += saldo;
     }
-    estadisticas.totalImporte += nota.importe || 0;
-    estadisticas.totalSaldoPendiente += nota.saldoPendiente || 0;
   });
-
-  estadisticas.deuda = estadisticas.totalSaldoPendiente;
 
   return estadisticas;
 };
 
-// Obtener créditos por mes
-exports.getCreditosPorMes = async (fechaDesde, fechaHasta) => {
+// Créditos por mes
+exports.getCreditosPorMes = async (fechaDesde, fechaHasta, sedeId) => {
   const where = {};
 
   if (fechaDesde) {
     where.fechaVenta = {
       ...where.fechaVenta,
-      gte: new Date(fechaDesde)
+      gte: new Date(fechaDesde),
     };
   }
-
   if (fechaHasta) {
     where.fechaVenta = {
       ...where.fechaVenta,
-      lte: new Date(fechaHasta)
+      lte: new Date(fechaHasta),
+    };
+  }
+
+  if (sedeId) {
+    where.cliente = {
+      ruta: {
+        sedeId: sedeId,
+      },
     };
   }
 
@@ -272,230 +290,261 @@ exports.getCreditosPorMes = async (fechaDesde, fechaHasta) => {
     where,
     select: {
       fechaVenta: true,
-      estado: true,
       importe: true,
-      saldoPendiente: true
-    }
+      saldoPendiente: true,
+      estado: true,
+    },
   });
 
   // Agrupar por mes
   const creditosPorMes = {};
-  notasCredito.forEach(nota => {
+  notasCredito.forEach((nota) => {
     const fecha = new Date(nota.fechaVenta);
     const mes = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
-    const mesNombre = fecha.toLocaleString('es-MX', { month: 'long', year: 'numeric' });
+    const nombreMes = fecha.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
     
     if (!creditosPorMes[mes]) {
       creditosPorMes[mes] = {
-        mes,
-        mesNombre,
-        activos: 0,
-        pagados: 0,
-        vencidos: 0,
+        mes: nombreMes,
+        cantidad: 0,
         totalImporte: 0,
-        totalSaldoPendiente: 0
+        totalSaldo: 0,
       };
     }
-    
-    if (nota.estado === 'vigente' || nota.estado === 'por_vencer') {
-      creditosPorMes[mes].activos += 1;
-    } else if (nota.estado === 'pagada') {
-      creditosPorMes[mes].pagados += 1;
-    } else if (nota.estado === 'vencida') {
-      creditosPorMes[mes].vencidos += 1;
-    }
-    
-    creditosPorMes[mes].totalImporte += nota.importe || 0;
-    creditosPorMes[mes].totalSaldoPendiente += nota.saldoPendiente || 0;
+    creditosPorMes[mes].cantidad += 1;
+    creditosPorMes[mes].totalImporte += parseFloat(nota.importe) || 0;
+    creditosPorMes[mes].totalSaldo += parseFloat(nota.saldoPendiente) || 0;
   });
 
-  return Object.values(creditosPorMes).sort((a, b) => a.mes.localeCompare(b.mes));
+  return Object.values(creditosPorMes).sort((a, b) => {
+    const fechaA = new Date(a.mes);
+    const fechaB = new Date(b.mes);
+    return fechaA - fechaB;
+  });
 };
 
-// Obtener ventas por tipo de servicio
-exports.getVentasPorTipoServicio = async (fechaDesde, fechaHasta) => {
+// Ventas por tipo de servicio
+exports.getVentasPorTipoServicio = async (fechaDesde, fechaHasta, sedeId) => {
   const where = {
-    estado: 'entregado'
+    estado: 'entregado',
   };
 
   if (fechaDesde) {
     where.fechaPedido = {
       ...where.fechaPedido,
-      gte: new Date(fechaDesde)
+      gte: new Date(fechaDesde),
     };
   }
-
   if (fechaHasta) {
     where.fechaPedido = {
       ...where.fechaPedido,
-      lte: new Date(fechaHasta)
+      lte: new Date(fechaHasta),
     };
+  }
+  if (sedeId) {
+    where.sedeId = sedeId;
   }
 
   const pedidos = await prisma.pedido.findMany({
     where,
     select: {
       tipoServicio: true,
-      ventaTotal: true
-    }
+      ventaTotal: true,
+    },
   });
 
-  const ventasPorTipo = {
-    pipas: { cantidad: 0, total: 0 },
-    cilindros: { cantidad: 0, total: 0 }
-  };
-
-  pedidos.forEach(pedido => {
-    if (pedido.tipoServicio === 'pipas') {
-      ventasPorTipo.pipas.cantidad += 1;
-      ventasPorTipo.pipas.total += pedido.ventaTotal || 0;
-    } else if (pedido.tipoServicio === 'cilindros') {
-      ventasPorTipo.cilindros.cantidad += 1;
-      ventasPorTipo.cilindros.total += pedido.ventaTotal || 0;
+  const ventasPorTipo = {};
+  pedidos.forEach((pedido) => {
+    const tipo = pedido.tipoServicio || 'sin_tipo';
+    if (!ventasPorTipo[tipo]) {
+      ventasPorTipo[tipo] = {
+        tipo: tipo,
+        cantidad: 0,
+        total: 0,
+      };
     }
+    ventasPorTipo[tipo].cantidad += 1;
+    ventasPorTipo[tipo].total += parseFloat(pedido.ventaTotal) || 0;
   });
 
-  return ventasPorTipo;
+  return Object.values(ventasPorTipo);
 };
 
-// Obtener ventas por forma de pago
-exports.getVentasPorFormaPago = async (fechaDesde, fechaHasta) => {
+// Ventas por forma de pago
+exports.getVentasPorFormaPago = async (fechaDesde, fechaHasta, sedeId) => {
   const where = {
-    estado: 'entregado'
+    estado: 'entregado',
   };
 
   if (fechaDesde) {
     where.fechaPedido = {
       ...where.fechaPedido,
-      gte: new Date(fechaDesde)
+      gte: new Date(fechaDesde),
     };
   }
-
   if (fechaHasta) {
     where.fechaPedido = {
       ...where.fechaPedido,
-      lte: new Date(fechaHasta)
+      lte: new Date(fechaHasta),
     };
+  }
+  if (sedeId) {
+    where.sedeId = sedeId;
   }
 
   const pedidos = await prisma.pedido.findMany({
     where,
+    include: {
+      pagos: true,
+    },
     select: {
-      formasPago: true,
+      id: true,
       ventaTotal: true,
-      montoPagado: true,
+      formasPago: true,
       pagos: {
         select: {
+          monto: true,
           tipo: true,
-          monto: true
-        }
-      }
-    }
+          metodoId: true,
+        },
+      },
+    },
   });
 
   const ventasPorFormaPago = {};
+  
+  // Obtener todas las formas de pago para poder buscar por metodoId
+  const formasPagoMap = {};
+  try {
+    const formasPago = await prisma.formaPago.findMany({
+      select: {
+        id: true,
+        nombre: true,
+      },
+    });
+    formasPago.forEach((fp) => {
+      formasPagoMap[fp.id] = fp.nombre;
+    });
+  } catch (error) {
+    console.error('Error al obtener formas de pago:', error);
+  }
 
-  pedidos.forEach(pedido => {
-    // Intentar parsear formasPago desde JSON
-    let formasPagoData = [];
+  pedidos.forEach((pedido) => {
+    let formasPagoUsadas = [];
+
+    // Intentar parsear el campo formasPago si es JSON
     if (pedido.formasPago) {
       try {
-        formasPagoData = typeof pedido.formasPago === 'string' 
-          ? JSON.parse(pedido.formasPago) 
-          : pedido.formasPago;
-        if (!Array.isArray(formasPagoData)) {
-          formasPagoData = [];
+        const formasPagoJson = JSON.parse(pedido.formasPago);
+        if (Array.isArray(formasPagoJson)) {
+          formasPagoUsadas = formasPagoJson;
+        } else if (formasPagoJson.formasPago && Array.isArray(formasPagoJson.formasPago)) {
+          formasPagoUsadas = formasPagoJson.formasPago;
         }
       } catch (e) {
-        formasPagoData = [];
+        // Si no es JSON válido, continuar
       }
     }
 
-    // Si hay formas de pago en el JSON
-    if (formasPagoData.length > 0) {
-      formasPagoData.forEach((fp) => {
-        const nombre = fp.nombre || fp.formaPago || 'Desconocido';
-        const tipo = fp.tipo || 'desconocido';
-        const monto = fp.monto || (pedido.ventaTotal / formasPagoData.length);
+    // Si hay pagos en PagoPedido, usar esos
+    if (pedido.pagos && pedido.pagos.length > 0) {
+      pedido.pagos.forEach((pago) => {
+        let formaPagoNombre = 'Sin forma de pago';
         
-        if (!ventasPorFormaPago[nombre]) {
-          ventasPorFormaPago[nombre] = {
-            nombre,
-            tipo,
+        if (pago.metodoId && formasPagoMap[pago.metodoId]) {
+          formaPagoNombre = formasPagoMap[pago.metodoId];
+        } else if (pago.tipo) {
+          formaPagoNombre = pago.tipo;
+        }
+
+        if (!ventasPorFormaPago[formaPagoNombre]) {
+          ventasPorFormaPago[formaPagoNombre] = {
+            formaPago: formaPagoNombre,
             cantidad: 0,
-            total: 0
+            total: 0,
           };
         }
-        ventasPorFormaPago[nombre].cantidad += 1;
-        ventasPorFormaPago[nombre].total += monto;
+        ventasPorFormaPago[formaPagoNombre].cantidad += 1;
+        ventasPorFormaPago[formaPagoNombre].total += parseFloat(pago.monto) || 0;
       });
-    } else if (pedido.pagos && pedido.pagos.length > 0) {
-      // Si no hay formas de pago en JSON, usar los pagos
-      pedido.pagos.forEach(pago => {
-        const tipo = pago.tipo === 'credito' ? 'Crédito' : 'Efectivo';
-        const nombre = tipo;
-        
-        if (!ventasPorFormaPago[nombre]) {
-          ventasPorFormaPago[nombre] = {
-            nombre,
-            tipo: tipo.toLowerCase(),
+    } else if (formasPagoUsadas.length > 0) {
+      // Usar las formas de pago del JSON
+      formasPagoUsadas.forEach((fp) => {
+        const formaPagoNombre = fp.nombre || fp.formaPago || 'Sin forma de pago';
+        const monto = parseFloat(fp.monto) || parseFloat(pedido.ventaTotal) / formasPagoUsadas.length;
+
+        if (!ventasPorFormaPago[formaPagoNombre]) {
+          ventasPorFormaPago[formaPagoNombre] = {
+            formaPago: formaPagoNombre,
             cantidad: 0,
-            total: 0
+            total: 0,
           };
         }
-        ventasPorFormaPago[nombre].cantidad += 1;
-        ventasPorFormaPago[nombre].total += pago.monto || 0;
+        ventasPorFormaPago[formaPagoNombre].cantidad += 1;
+        ventasPorFormaPago[formaPagoNombre].total += monto;
       });
     } else {
-      // Si no hay información de pago, usar efectivo por defecto
-      const nombre = 'Efectivo';
-      if (!ventasPorFormaPago[nombre]) {
-        ventasPorFormaPago[nombre] = {
-          nombre,
-          tipo: 'efectivo',
+      // Si no hay información de forma de pago, usar "Efectivo" por defecto
+      const formaPagoNombre = 'Efectivo';
+      if (!ventasPorFormaPago[formaPagoNombre]) {
+        ventasPorFormaPago[formaPagoNombre] = {
+          formaPago: formaPagoNombre,
           cantidad: 0,
-          total: 0
+          total: 0,
         };
       }
-      ventasPorFormaPago[nombre].cantidad += 1;
-      ventasPorFormaPago[nombre].total += pedido.montoPagado || pedido.ventaTotal || 0;
+      ventasPorFormaPago[formaPagoNombre].cantidad += 1;
+      ventasPorFormaPago[formaPagoNombre].total += parseFloat(pedido.ventaTotal) || 0;
     }
   });
 
   return Object.values(ventasPorFormaPago);
 };
 
-// Obtener resumen general de reportes
-exports.getResumenGeneral = async (fechaDesde, fechaHasta) => {
-  const [
-    ventasPorMes,
-    cortesPorMes,
-    dineroEntregado,
-    clientesPorZona,
-    estadisticasCreditos,
-    creditosPorMes,
-    ventasPorTipoServicio,
-    ventasPorFormaPago
-  ] = await Promise.all([
-    exports.getVentasPorMes(fechaDesde, fechaHasta),
-    exports.getCortesPorMes(fechaDesde, fechaHasta),
-    exports.getDineroEntregadoPorCortes(fechaDesde, fechaHasta),
-    exports.getClientesPorZona(),
-    exports.getEstadisticasCreditos(fechaDesde, fechaHasta),
-    exports.getCreditosPorMes(fechaDesde, fechaHasta),
-    exports.getVentasPorTipoServicio(fechaDesde, fechaHasta),
-    exports.getVentasPorFormaPago(fechaDesde, fechaHasta)
-  ]);
+// Resumen general
+exports.getResumenGeneral = async (fechaDesde, fechaHasta, sedeId) => {
+  const wherePedidos = {
+    estado: 'entregado',
+  };
+
+  if (fechaDesde) {
+    wherePedidos.fechaPedido = {
+      ...wherePedidos.fechaPedido,
+      gte: new Date(fechaDesde),
+    };
+  }
+  if (fechaHasta) {
+    wherePedidos.fechaPedido = {
+      ...wherePedidos.fechaPedido,
+      lte: new Date(fechaHasta),
+    };
+  }
+  if (sedeId) {
+    wherePedidos.sedeId = sedeId;
+  }
+
+  const pedidos = await prisma.pedido.findMany({
+    where: wherePedidos,
+    select: {
+      ventaTotal: true,
+      cantidadProductos: true,
+    },
+  });
+
+  const totalVentas = pedidos.reduce((sum, p) => sum + (parseFloat(p.ventaTotal) || 0), 0);
+  const totalProductos = pedidos.reduce((sum, p) => sum + (p.cantidadProductos || 0), 0);
+  const cantidadPedidos = pedidos.length;
+
+  const estadisticasCreditos = await this.getEstadisticasCreditos(sedeId);
+  const clientesPorZona = await this.getClientesPorZona(sedeId);
+  const totalClientes = clientesPorZona.reduce((sum, z) => sum + z.cantidad, 0);
 
   return {
-    ventasPorMes,
-    cortesPorMes,
-    dineroEntregado,
-    clientesPorZona,
-    estadisticasCreditos,
-    creditosPorMes,
-    ventasPorTipoServicio,
-    ventasPorFormaPago
+    totalVentas,
+    cantidadPedidos,
+    totalProductos,
+    totalClientes,
+    creditos: estadisticasCreditos,
   };
 };
 

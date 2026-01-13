@@ -1,100 +1,101 @@
 const reporteService = require('../../services/reporte.service');
 
-// Obtener ventas por mes
-exports.getVentasPorMes = async (req, res, next) => {
+exports.getVentasPorMes = async (req, res) => {
   try {
-    const { fechaDesde, fechaHasta } = req.query;
-    const ventas = await reporteService.getVentasPorMes(fechaDesde, fechaHasta);
-    res.status(200).json(ventas);
+    const { fechaDesde, fechaHasta, sedeId } = req.query;
+    const ventas = await reporteService.getVentasPorMes(fechaDesde, fechaHasta, sedeId);
+    res.json(ventas);
   } catch (error) {
-    next(error);
+    console.error('Error al obtener ventas por mes:', error);
+    res.status(500).json({ message: 'Error al obtener ventas por mes', error: error.message });
   }
 };
 
-// Obtener cortes por mes
-exports.getCortesPorMes = async (req, res, next) => {
+exports.getCortesPorMes = async (req, res) => {
   try {
-    const { fechaDesde, fechaHasta } = req.query;
-    const cortes = await reporteService.getCortesPorMes(fechaDesde, fechaHasta);
-    res.status(200).json(cortes);
+    const { fechaDesde, fechaHasta, sedeId } = req.query;
+    const cortes = await reporteService.getCortesPorMes(fechaDesde, fechaHasta, sedeId);
+    res.json(cortes);
   } catch (error) {
-    next(error);
+    console.error('Error al obtener cortes por mes:', error);
+    res.status(500).json({ message: 'Error al obtener cortes por mes', error: error.message });
   }
 };
 
-// Obtener dinero entregado por cortes
-exports.getDineroEntregadoPorCortes = async (req, res, next) => {
+exports.getDineroEntregadoPorCortes = async (req, res) => {
   try {
-    const { fechaDesde, fechaHasta } = req.query;
-    const dinero = await reporteService.getDineroEntregadoPorCortes(fechaDesde, fechaHasta);
-    res.status(200).json(dinero);
+    const { fechaDesde, fechaHasta, sedeId } = req.query;
+    const dinero = await reporteService.getDineroEntregadoPorCortes(fechaDesde, fechaHasta, sedeId);
+    res.json(dinero);
   } catch (error) {
-    next(error);
+    console.error('Error al obtener dinero entregado por cortes:', error);
+    res.status(500).json({ message: 'Error al obtener dinero entregado por cortes', error: error.message });
   }
 };
 
-// Obtener clientes por zona
-exports.getClientesPorZona = async (req, res, next) => {
+exports.getClientesPorZona = async (req, res) => {
   try {
-    const clientes = await reporteService.getClientesPorZona();
-    res.status(200).json(clientes);
+    const { sedeId } = req.query;
+    const clientes = await reporteService.getClientesPorZona(sedeId);
+    res.json(clientes);
   } catch (error) {
-    next(error);
+    console.error('Error al obtener clientes por zona:', error);
+    res.status(500).json({ message: 'Error al obtener clientes por zona', error: error.message });
   }
 };
 
-// Obtener estadísticas de créditos
-exports.getEstadisticasCreditos = async (req, res, next) => {
+exports.getEstadisticasCreditos = async (req, res) => {
   try {
-    const { fechaDesde, fechaHasta } = req.query;
-    const estadisticas = await reporteService.getEstadisticasCreditos(fechaDesde, fechaHasta);
-    res.status(200).json(estadisticas);
+    const { sedeId } = req.query;
+    const estadisticas = await reporteService.getEstadisticasCreditos(sedeId);
+    res.json(estadisticas);
   } catch (error) {
-    next(error);
+    console.error('Error al obtener estadísticas de créditos:', error);
+    res.status(500).json({ message: 'Error al obtener estadísticas de créditos', error: error.message });
   }
 };
 
-// Obtener créditos por mes
-exports.getCreditosPorMes = async (req, res, next) => {
+exports.getCreditosPorMes = async (req, res) => {
   try {
-    const { fechaDesde, fechaHasta } = req.query;
-    const creditos = await reporteService.getCreditosPorMes(fechaDesde, fechaHasta);
-    res.status(200).json(creditos);
+    const { fechaDesde, fechaHasta, sedeId } = req.query;
+    const creditos = await reporteService.getCreditosPorMes(fechaDesde, fechaHasta, sedeId);
+    res.json(creditos);
   } catch (error) {
-    next(error);
+    console.error('Error al obtener créditos por mes:', error);
+    res.status(500).json({ message: 'Error al obtener créditos por mes', error: error.message });
   }
 };
 
-// Obtener ventas por tipo de servicio
-exports.getVentasPorTipoServicio = async (req, res, next) => {
+exports.getVentasPorTipoServicio = async (req, res) => {
   try {
-    const { fechaDesde, fechaHasta } = req.query;
-    const ventas = await reporteService.getVentasPorTipoServicio(fechaDesde, fechaHasta);
-    res.status(200).json(ventas);
+    const { fechaDesde, fechaHasta, sedeId } = req.query;
+    const ventas = await reporteService.getVentasPorTipoServicio(fechaDesde, fechaHasta, sedeId);
+    res.json(ventas);
   } catch (error) {
-    next(error);
+    console.error('Error al obtener ventas por tipo de servicio:', error);
+    res.status(500).json({ message: 'Error al obtener ventas por tipo de servicio', error: error.message });
   }
 };
 
-// Obtener ventas por forma de pago
-exports.getVentasPorFormaPago = async (req, res, next) => {
+exports.getVentasPorFormaPago = async (req, res) => {
   try {
-    const { fechaDesde, fechaHasta } = req.query;
-    const ventas = await reporteService.getVentasPorFormaPago(fechaDesde, fechaHasta);
-    res.status(200).json(ventas);
+    const { fechaDesde, fechaHasta, sedeId } = req.query;
+    const ventas = await reporteService.getVentasPorFormaPago(fechaDesde, fechaHasta, sedeId);
+    res.json(ventas);
   } catch (error) {
-    next(error);
+    console.error('Error al obtener ventas por forma de pago:', error);
+    res.status(500).json({ message: 'Error al obtener ventas por forma de pago', error: error.message });
   }
 };
 
-// Obtener resumen general
-exports.getResumenGeneral = async (req, res, next) => {
+exports.getResumenGeneral = async (req, res) => {
   try {
-    const { fechaDesde, fechaHasta } = req.query;
-    const resumen = await reporteService.getResumenGeneral(fechaDesde, fechaHasta);
-    res.status(200).json(resumen);
+    const { fechaDesde, fechaHasta, sedeId } = req.query;
+    const resumen = await reporteService.getResumenGeneral(fechaDesde, fechaHasta, sedeId);
+    res.json(resumen);
   } catch (error) {
-    next(error);
+    console.error('Error al obtener resumen general:', error);
+    res.status(500).json({ message: 'Error al obtener resumen general', error: error.message });
   }
 };
 

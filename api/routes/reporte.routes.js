@@ -9,7 +9,7 @@ router.use(protect);
 // Rutas de reportes
 router.get('/ventas-por-mes', reporteController.getVentasPorMes);
 router.get('/cortes-por-mes', reporteController.getCortesPorMes);
-router.get('/dinero-entregado-cortes', reporteController.getDineroEntregadoPorCortes);
+router.get('/dinero-entregado-por-cortes', reporteController.getDineroEntregadoPorCortes);
 router.get('/clientes-por-zona', reporteController.getClientesPorZona);
 router.get('/estadisticas-creditos', reporteController.getEstadisticasCreditos);
 router.get('/creditos-por-mes', reporteController.getCreditosPorMes);

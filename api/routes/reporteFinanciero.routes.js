@@ -6,22 +6,18 @@ const { protect } = require('../middlewares/auth.middleware');
 // Todas las rutas requieren autenticación
 router.use(protect);
 
-// Reportes Ejecutivos
+// Rutas de reportes financieros
 router.get('/antiguedad-cartera', reporteFinancieroController.getAntiguedadCartera);
 router.get('/top-mejores-pagadores', reporteFinancieroController.getTopMejoresPagadores);
 router.get('/top-peores-pagadores', reporteFinancieroController.getTopPeoresPagadores);
 router.get('/analisis-riesgo', reporteFinancieroController.getAnalisisRiesgo);
-
-// Reportes Operativos
-router.get('/clientes-visita-cobranza', reporteFinancieroController.getClientesVisitaCobranza);
+router.get('/clientes-visita-cobranza', reporteFinancieroController.getClientesParaVisitaCobranza);
 router.get('/recordatorios-por-enviar', reporteFinancieroController.getRecordatoriosPorEnviar);
-router.get('/transferencias-pendientes', reporteFinancieroController.getTransferenciasPendientes);
-router.get('/clientes-limite-excedido', reporteFinancieroController.getClientesLimiteExcedido);
-
-// Reportes Estratégicos
+router.get('/transferencias-pendientes', reporteFinancieroController.getTransferenciasPendientesConfirmacion);
+router.get('/clientes-limite-excedido', reporteFinancieroController.getClientesConLimiteExcedido);
 router.get('/comparativo-cartera-ventas', reporteFinancieroController.getComparativoCarteraVentas);
-router.get('/eficiencia-cobranza-repartidor', reporteFinancieroController.getEficienciaCobranzaRepartidor);
-router.get('/tendencias-pago', reporteFinancieroController.getTendenciasPago);
+router.get('/eficiencia-cobranza-repartidor', reporteFinancieroController.getEficienciaCobranzaPorRepartidor);
+router.get('/analisis-tendencias-pago', reporteFinancieroController.getAnalisisTendenciasPago);
 router.get('/proyeccion-flujo-caja', reporteFinancieroController.getProyeccionFlujoCaja);
 
 module.exports = router;

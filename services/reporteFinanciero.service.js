@@ -1,244 +1,262 @@
 const { prisma } = require('../config/database');
 
-// Antigüedad de Cartera (30, 60, 90+ días)
-exports.getAntiguedadCartera = async () => {
-  const notasCredito = await prisma.notaCredito.findMany({
-    where: {
-      estado: {
-        in: ['vigente', 'por_vencer', 'vencida']
-      }
+// Antigüedad de cartera
+exports.getAntiguedadCartera = async (sedeId) => {
+  const where = {
+    estado: {
+      in: ['vigente', 'por_vencer', 'vencida'],
     },
+  };
+
+  if (sedeId) {
+    where.cliente = {
+      ruta: {
+        sedeId: sedeId,
+      },
+    };
+  }
+
+  const notasCredito = await prisma.notaCredito.findMany({
+    where,
     include: {
       cliente: {
         select: {
-          id: true,
           nombre: true,
           apellidoPaterno: true,
           apellidoMaterno: true,
           telefono: true,
           ruta: {
             select: {
-              nombre: true
-            }
-          }
-        }
-      }
-    }
+              nombre: true,
+            },
+          },
+        },
+      },
+    },
   });
 
   const hoy = new Date();
   const antiguedad = {
-    menos30: [],
-    entre30y60: [],
-    entre60y90: [],
-    mas90: []
+    '0-30': [],
+    '31-60': [],
+    '61-90': [],
+    '90+': [],
   };
 
-  notasCredito.forEach(nota => {
-    const fechaVencimiento = new Date(nota.fechaVencimiento);
-    const diasVencidos = Math.floor((hoy - fechaVencimiento) / (1000 * 60 * 60 * 24));
-    
-    const item = {
-      numeroNota: nota.numeroNota,
-      cliente: `${nota.cliente.nombre} ${nota.cliente.apellidoPaterno} ${nota.cliente.apellidoMaterno || ''}`.trim(),
-      telefono: nota.cliente.telefono,
-      ruta: nota.cliente.ruta?.nombre || 'Sin ruta',
-      fechaVenta: nota.fechaVenta,
-      fechaVencimiento: nota.fechaVencimiento,
-      importe: nota.importe,
-      saldoPendiente: nota.saldoPendiente,
-      diasVencidos: diasVencidos,
-      estado: nota.estado
-    };
+  notasCredito.forEach((nota) => {
+    const diasVencimiento = nota.diasVencimiento || 0;
+    const saldo = parseFloat(nota.saldoPendiente) || 0;
 
-    if (diasVencidos < 0) {
-      // Aún no vence
-      return;
-    } else if (diasVencidos <= 30) {
-      antiguedad.menos30.push(item);
-    } else if (diasVencidos <= 60) {
-      antiguedad.entre30y60.push(item);
-    } else if (diasVencidos <= 90) {
-      antiguedad.entre60y90.push(item);
+    if (diasVencimiento <= 30) {
+      antiguedad['0-30'].push({
+        ...nota,
+        clienteNombre: `${nota.cliente.nombre} ${nota.cliente.apellidoPaterno} ${nota.cliente.apellidoMaterno}`,
+        saldo,
+      });
+    } else if (diasVencimiento <= 60) {
+      antiguedad['31-60'].push({
+        ...nota,
+        clienteNombre: `${nota.cliente.nombre} ${nota.cliente.apellidoPaterno} ${nota.cliente.apellidoMaterno}`,
+        saldo,
+      });
+    } else if (diasVencimiento <= 90) {
+      antiguedad['61-90'].push({
+        ...nota,
+        clienteNombre: `${nota.cliente.nombre} ${nota.cliente.apellidoPaterno} ${nota.cliente.apellidoMaterno}`,
+        saldo,
+      });
     } else {
-      antiguedad.mas90.push(item);
+      antiguedad['90+'].push({
+        ...nota,
+        clienteNombre: `${nota.cliente.nombre} ${nota.cliente.apellidoPaterno} ${nota.cliente.apellidoMaterno}`,
+        saldo,
+      });
     }
   });
 
   return antiguedad;
 };
 
-// Top 10 Mejores Pagadores
-exports.getTopMejoresPagadores = async (limite = 10) => {
-  const clientes = await prisma.cliente.findMany({
-    where: {
-      estadoCliente: 'activo'
-    },
-    include: {
-      notasCredito: {
-        where: {
-          estado: 'pagada'
-        }
-      },
-      abonos: true,
+// Top mejores pagadores
+exports.getTopMejoresPagadores = async (limite = 10, sedeId) => {
+  const where = {};
+
+  if (sedeId) {
+    where.cliente = {
       ruta: {
-        select: {
-          nombre: true
-        }
-      }
-    }
-  });
-
-  const clientesConPuntuacion = clientes.map(cliente => {
-    const totalPagado = cliente.abonos.reduce((sum, abono) => sum + abono.monto, 0);
-    const notasPagadas = cliente.notasCredito.length;
-    const promedioDiasPago = cliente.notasCredito.length > 0 
-      ? cliente.notasCredito.reduce((sum, nota) => {
-          const fechaVenta = new Date(nota.fechaVenta);
-          const fechaPago = new Date(nota.fechaModificacion);
-          return sum + Math.floor((fechaPago - fechaVenta) / (1000 * 60 * 60 * 24));
-        }, 0) / cliente.notasCredito.length
-      : 0;
-
-    return {
-      id: cliente.id,
-      nombre: `${cliente.nombre} ${cliente.apellidoPaterno} ${cliente.apellidoMaterno || ''}`.trim(),
-      telefono: cliente.telefono,
-      ruta: cliente.ruta?.nombre || 'Sin ruta',
-      totalPagado,
-      notasPagadas,
-      promedioDiasPago: Math.round(promedioDiasPago),
-      limiteCredito: cliente.limiteCredito,
-      saldoActual: cliente.saldoActual
+        sedeId: sedeId,
+      },
     };
-  });
+  }
 
-  return clientesConPuntuacion
-    .sort((a, b) => b.totalPagado - a.totalPagado)
-    .slice(0, limite);
-};
-
-// Top 10 Peores Pagadores
-exports.getTopPeoresPagadores = async (limite = 10) => {
-  const clientes = await prisma.cliente.findMany({
+  const pagos = await prisma.pago.findMany({
     where: {
-      estadoCliente: 'activo'
+      estado: 'autorizado',
+      ...where,
     },
     include: {
-      notasCredito: {
-        where: {
-          estado: {
-            in: ['vencida', 'por_vencer']
-          }
-        }
+      cliente: {
+        select: {
+          nombre: true,
+          apellidoPaterno: true,
+          apellidoMaterno: true,
+          telefono: true,
+          ruta: {
+            select: {
+              nombre: true,
+            },
+          },
+        },
       },
-      ruta: {
-        select: {
-          nombre: true
-        }
-      }
-    }
+    },
+    orderBy: {
+      montoTotal: 'desc',
+    },
+    take: limite,
   });
 
-  const clientesConProblemas = clientes
-    .map(cliente => {
-      const totalVencido = cliente.notasCredito
-        .filter(nota => nota.estado === 'vencida')
-        .reduce((sum, nota) => sum + nota.saldoPendiente, 0);
-      
-      const totalPorVencer = cliente.notasCredito
-        .filter(nota => nota.estado === 'por_vencer')
-        .reduce((sum, nota) => sum + nota.saldoPendiente, 0);
-
-      const diasPromedioVencimiento = cliente.notasCredito.length > 0
-        ? cliente.notasCredito.reduce((sum, nota) => {
-            const hoy = new Date();
-            const fechaVencimiento = new Date(nota.fechaVencimiento);
-            return sum + Math.floor((hoy - fechaVencimiento) / (1000 * 60 * 60 * 24));
-          }, 0) / cliente.notasCredito.length
-        : 0;
-
-      return {
-        id: cliente.id,
-        nombre: `${cliente.nombre} ${cliente.apellidoPaterno} ${cliente.apellidoMaterno || ''}`.trim(),
-        telefono: cliente.telefono,
-        ruta: cliente.ruta?.nombre || 'Sin ruta',
-        totalVencido,
-        totalPorVencer,
-        cantidadNotasVencidas: cliente.notasCredito.filter(n => n.estado === 'vencida').length,
-        diasPromedioVencimiento: Math.round(diasPromedioVencimiento),
-        limiteCredito: cliente.limiteCredito,
-        saldoActual: cliente.saldoActual
-      };
-    })
-    .filter(cliente => cliente.totalVencido > 0 || cliente.totalPorVencer > 0)
-    .sort((a, b) => (b.totalVencido + b.totalPorVencer) - (a.totalVencido + a.totalPorVencer))
-    .slice(0, limite);
-
-  return clientesConProblemas;
+  return pagos.map((pago) => ({
+    clienteId: pago.clienteId,
+    clienteNombre: `${pago.cliente.nombre} ${pago.cliente.apellidoPaterno} ${pago.cliente.apellidoMaterno}`,
+    telefono: pago.cliente.telefono,
+    ruta: pago.cliente.ruta?.nombre || 'Sin ruta',
+    montoTotal: parseFloat(pago.montoTotal) || 0,
+    fechaPago: pago.fechaPago,
+  }));
 };
 
-// Análisis de Riesgo
-exports.getAnalisisRiesgo = async () => {
-  const clientes = await prisma.cliente.findMany({
+// Top peores pagadores
+exports.getTopPeoresPagadores = async (limite = 10, sedeId) => {
+  const where = {
+    estado: {
+      in: ['vigente', 'vencida'],
+    },
+  };
+
+  if (sedeId) {
+    where.cliente = {
+      ruta: {
+        sedeId: sedeId,
+      },
+    };
+  }
+
+  const notasCredito = await prisma.notaCredito.findMany({
+    where,
+    include: {
+      cliente: {
+        select: {
+          nombre: true,
+          apellidoPaterno: true,
+          apellidoMaterno: true,
+          telefono: true,
+          ruta: {
+            select: {
+              nombre: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: {
+      diasVencimiento: 'desc',
+    },
+  });
+
+  // Agrupar por cliente y sumar saldos
+  const clientesMap = {};
+  notasCredito.forEach((nota) => {
+    const clienteId = nota.clienteId;
+    if (!clientesMap[clienteId]) {
+      clientesMap[clienteId] = {
+        clienteId,
+        clienteNombre: `${nota.cliente.nombre} ${nota.cliente.apellidoPaterno} ${nota.cliente.apellidoMaterno}`,
+        telefono: nota.cliente.telefono,
+        ruta: nota.cliente.ruta?.nombre || 'Sin ruta',
+        saldoTotal: 0,
+        diasVencimiento: 0,
+        cantidadNotas: 0,
+      };
+    }
+    clientesMap[clienteId].saldoTotal += parseFloat(nota.saldoPendiente) || 0;
+    clientesMap[clienteId].diasVencimiento = Math.max(
+      clientesMap[clienteId].diasVencimiento,
+      nota.diasVencimiento || 0
+    );
+    clientesMap[clienteId].cantidadNotas += 1;
+  });
+
+  return Object.values(clientesMap)
+    .sort((a, b) => b.saldoTotal - a.saldoTotal)
+    .slice(0, limite);
+};
+
+// Análisis de riesgo
+exports.getAnalisisRiesgo = async (sedeId) => {
+  const where = {};
+
+  if (sedeId) {
+    where.cliente = {
+      ruta: {
+        sedeId: sedeId,
+      },
+    };
+  }
+
+  const notasCredito = await prisma.notaCredito.findMany({
     where: {
-      estadoCliente: 'activo'
+      estado: {
+        in: ['vigente', 'por_vencer', 'vencida'],
+      },
+      ...where,
     },
     include: {
-      notasCredito: true,
-      abonos: true,
-      ruta: {
+      cliente: {
         select: {
-          nombre: true
-        }
-      }
-    }
+          nombre: true,
+          apellidoPaterno: true,
+          apellidoMaterno: true,
+          limiteCredito: true,
+          saldoActual: true,
+          ruta: {
+            select: {
+              nombre: true,
+            },
+          },
+        },
+      },
+    },
   });
 
   const analisis = {
     bajo: [],
     medio: [],
     alto: [],
-    critico: []
+    critico: [],
   };
 
-  clientes.forEach(cliente => {
-    const saldoActual = cliente.saldoActual;
-    const limiteCredito = cliente.limiteCredito;
-    const porcentajeUso = limiteCredito > 0 ? (saldoActual / limiteCredito) * 100 : 0;
-    
-    const notasVencidas = cliente.notasCredito.filter(n => n.estado === 'vencida').length;
-    const totalVencido = cliente.notasCredito
-      .filter(n => n.estado === 'vencida')
-      .reduce((sum, n) => sum + n.saldoPendiente, 0);
-
-    const diasPromedioVencimiento = cliente.notasCredito.length > 0
-      ? cliente.notasCredito.reduce((sum, nota) => {
-          const hoy = new Date();
-          const fechaVencimiento = new Date(nota.fechaVencimiento);
-          return sum + Math.max(0, Math.floor((hoy - fechaVencimiento) / (1000 * 60 * 60 * 24)));
-        }, 0) / cliente.notasCredito.length
-      : 0;
+  notasCredito.forEach((nota) => {
+    const saldo = parseFloat(nota.saldoPendiente) || 0;
+    const limiteCredito = parseFloat(nota.cliente.limiteCredito) || 0;
+    const porcentajeUso = limiteCredito > 0 ? (saldo / limiteCredito) * 100 : 0;
+    const diasVencimiento = nota.diasVencimiento || 0;
 
     const item = {
-      id: cliente.id,
-      nombre: `${cliente.nombre} ${cliente.apellidoPaterno} ${cliente.apellidoMaterno || ''}`.trim(),
-      telefono: cliente.telefono,
-      ruta: cliente.ruta?.nombre || 'Sin ruta',
+      clienteId: nota.clienteId,
+      clienteNombre: `${nota.cliente.nombre} ${nota.cliente.apellidoPaterno} ${nota.cliente.apellidoMaterno}`,
+      ruta: nota.cliente.ruta?.nombre || 'Sin ruta',
+      saldo,
       limiteCredito,
-      saldoActual,
-      porcentajeUso: Math.round(porcentajeUso),
-      notasVencidas,
-      totalVencido,
-      diasPromedioVencimiento: Math.round(diasPromedioVencimiento)
+      porcentajeUso,
+      diasVencimiento,
+      estado: nota.estado,
     };
 
-    // Clasificación de riesgo
-    if (porcentajeUso > 100 || totalVencido > limiteCredito * 0.5 || diasPromedioVencimiento > 90) {
+    if (diasVencimiento > 90 || porcentajeUso > 100) {
       analisis.critico.push(item);
-    } else if (porcentajeUso > 80 || totalVencido > limiteCredito * 0.3 || diasPromedioVencimiento > 60) {
+    } else if (diasVencimiento > 60 || porcentajeUso > 80) {
       analisis.alto.push(item);
-    } else if (porcentajeUso > 50 || totalVencido > 0 || diasPromedioVencimiento > 30) {
+    } else if (diasVencimiento > 30 || porcentajeUso > 50) {
       analisis.medio.push(item);
     } else {
       analisis.bajo.push(item);
@@ -248,21 +266,195 @@ exports.getAnalisisRiesgo = async () => {
   return analisis;
 };
 
-// Clientes para Visita de Cobranza (por Ruta)
-exports.getClientesVisitaCobranza = async (rutaId = null) => {
+// Clientes para visita de cobranza
+exports.getClientesParaVisitaCobranza = async (rutaId, sedeId) => {
   const where = {
-    estadoCliente: 'activo',
-    notasCredito: {
-      some: {
-        estado: {
-          in: ['vencida', 'por_vencer']
-        }
-      }
-    }
+    estado: {
+      in: ['vencida', 'por_vencer'],
+    },
   };
 
   if (rutaId) {
-    where.rutaId = rutaId;
+    where.cliente = {
+      rutaId: rutaId,
+    };
+  } else if (sedeId) {
+    where.cliente = {
+      ruta: {
+        sedeId: sedeId,
+      },
+    };
+  }
+
+  const notasCredito = await prisma.notaCredito.findMany({
+    where,
+    include: {
+      cliente: {
+        select: {
+          nombre: true,
+          apellidoPaterno: true,
+          apellidoMaterno: true,
+          telefono: true,
+          calle: true,
+          numeroExterior: true,
+          colonia: true,
+          municipio: true,
+          estado: true,
+          ruta: {
+            select: {
+              id: true,
+              nombre: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: {
+      diasVencimiento: 'desc',
+    },
+  });
+
+  // Agrupar por cliente
+  const clientesMap = {};
+  notasCredito.forEach((nota) => {
+    const clienteId = nota.clienteId;
+    if (!clientesMap[clienteId]) {
+      clientesMap[clienteId] = {
+        clienteId,
+        clienteNombre: `${nota.cliente.nombre} ${nota.cliente.apellidoPaterno} ${nota.cliente.apellidoMaterno}`,
+        telefono: nota.cliente.telefono,
+        direccion: `${nota.cliente.calle} ${nota.cliente.numeroExterior}, ${nota.cliente.colonia}, ${nota.cliente.municipio}, ${nota.cliente.estado}`,
+        rutaId: nota.cliente.ruta?.id,
+        rutaNombre: nota.cliente.ruta?.nombre || 'Sin ruta',
+        saldoTotal: 0,
+        diasVencimiento: 0,
+        cantidadNotas: 0,
+      };
+    }
+    clientesMap[clienteId].saldoTotal += parseFloat(nota.saldoPendiente) || 0;
+    clientesMap[clienteId].diasVencimiento = Math.max(
+      clientesMap[clienteId].diasVencimiento,
+      nota.diasVencimiento || 0
+    );
+    clientesMap[clienteId].cantidadNotas += 1;
+  });
+
+  return Object.values(clientesMap).sort((a, b) => b.diasVencimiento - a.diasVencimiento);
+};
+
+// Recordatorios por enviar
+exports.getRecordatoriosPorEnviar = async (sedeId) => {
+  const where = {
+    estado: {
+      in: ['por_vencer', 'vencida'],
+    },
+  };
+
+  if (sedeId) {
+    where.cliente = {
+      ruta: {
+        sedeId: sedeId,
+      },
+    };
+  }
+
+  const notasCredito = await prisma.notaCredito.findMany({
+    where,
+    include: {
+      cliente: {
+        select: {
+          nombre: true,
+          apellidoPaterno: true,
+          apellidoMaterno: true,
+          email: true,
+          telefono: true,
+        },
+      },
+    },
+  });
+
+  return notasCredito.map((nota) => ({
+    notaCreditoId: nota.id,
+    numeroNota: nota.numeroNota,
+    clienteNombre: `${nota.cliente.nombre} ${nota.cliente.apellidoPaterno} ${nota.cliente.apellidoMaterno}`,
+    email: nota.cliente.email,
+    telefono: nota.cliente.telefono,
+    saldo: parseFloat(nota.saldoPendiente) || 0,
+    fechaVencimiento: nota.fechaVencimiento,
+    diasVencimiento: nota.diasVencimiento || 0,
+    estado: nota.estado,
+  }));
+};
+
+// Transferencias pendientes de confirmación
+exports.getTransferenciasPendientesConfirmacion = async (sedeId) => {
+  const where = {
+    estado: 'pendiente',
+    formasPago: {
+      some: {
+        formaPago: {
+          tipo: 'transferencia',
+        },
+      },
+    },
+  };
+
+  if (sedeId) {
+    where.cliente = {
+      ruta: {
+        sedeId: sedeId,
+      },
+    };
+  }
+
+  const pagos = await prisma.pago.findMany({
+    where,
+    include: {
+      cliente: {
+        select: {
+          nombre: true,
+          apellidoPaterno: true,
+          apellidoMaterno: true,
+        },
+      },
+      formasPago: {
+        include: {
+          formaPago: {
+            select: {
+              nombre: true,
+              tipo: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: {
+      fechaPago: 'desc',
+    },
+  });
+
+  return pagos.map((pago) => ({
+    pagoId: pago.id,
+    clienteNombre: `${pago.cliente.nombre} ${pago.cliente.apellidoPaterno} ${pago.cliente.apellidoMaterno}`,
+    montoTotal: parseFloat(pago.montoTotal) || 0,
+    fechaPago: pago.fechaPago,
+    formasPago: pago.formasPago.map((fp) => ({
+      formaPago: fp.formaPago.nombre,
+      monto: parseFloat(fp.monto) || 0,
+      referencia: fp.referencia,
+      banco: fp.banco,
+    })),
+  }));
+};
+
+// Clientes con límite excedido
+exports.getClientesConLimiteExcedido = async (sedeId) => {
+  const where = {};
+
+  if (sedeId) {
+    where.ruta = {
+      sedeId: sedeId,
+    };
   }
 
   const clientes = await prisma.cliente.findMany({
@@ -271,472 +463,299 @@ exports.getClientesVisitaCobranza = async (rutaId = null) => {
       notasCredito: {
         where: {
           estado: {
-            in: ['vencida', 'por_vencer']
-          }
-        }
+            in: ['vigente', 'por_vencer', 'vencida'],
+          },
+        },
       },
       ruta: {
         select: {
-          id: true,
-          nombre: true
-        }
-      },
-      zona: {
-        select: {
-          nombre: true
-        }
-      }
-    }
-  });
-
-  return clientes.map(cliente => {
-    const totalVencido = cliente.notasCredito
-      .filter(n => n.estado === 'vencida')
-      .reduce((sum, n) => sum + n.saldoPendiente, 0);
-    
-    const totalPorVencer = cliente.notasCredito
-      .filter(n => n.estado === 'por_vencer')
-      .reduce((sum, n) => sum + n.saldoPendiente, 0);
-
-    const ultimaVisita = null; // Se puede agregar un campo de historial de visitas
-
-    return {
-      id: cliente.id,
-      nombre: `${cliente.nombre} ${cliente.apellidoPaterno} ${cliente.apellidoMaterno || ''}`.trim(),
-      telefono: cliente.telefono,
-      calle: cliente.calle,
-      numeroExterior: cliente.numeroExterior,
-      colonia: cliente.colonia,
-      ruta: cliente.ruta?.nombre || 'Sin ruta',
-      rutaId: cliente.rutaId,
-      zona: cliente.zona?.nombre || 'Sin zona',
-      totalVencido,
-      totalPorVencer,
-      cantidadNotas: cliente.notasCredito.length,
-      ultimaVisita
-    };
-  }).sort((a, b) => (b.totalVencido + b.totalPorVencer) - (a.totalVencido + a.totalPorVencer));
-};
-
-// Recordatorios por Enviar
-exports.getRecordatoriosPorEnviar = async () => {
-  const hoy = new Date();
-  const en3Dias = new Date();
-  en3Dias.setDate(hoy.getDate() + 3);
-
-  const notasPorVencer = await prisma.notaCredito.findMany({
-    where: {
-      estado: {
-        in: ['vigente', 'por_vencer']
-      },
-      fechaVencimiento: {
-        lte: en3Dias,
-        gte: hoy
-      }
-    },
-    include: {
-      cliente: {
-        select: {
-          id: true,
           nombre: true,
-          apellidoPaterno: true,
-          apellidoMaterno: true,
-          email: true,
-          telefono: true
-        }
-      }
-    }
-  });
-
-  return notasPorVencer.map(nota => {
-    const diasParaVencer = Math.ceil((new Date(nota.fechaVencimiento) - hoy) / (1000 * 60 * 60 * 24));
-    
-    return {
-      id: nota.id,
-      numeroNota: nota.numeroNota,
-      cliente: `${nota.cliente.nombre} ${nota.cliente.apellidoPaterno} ${nota.cliente.apellidoMaterno || ''}`.trim(),
-      email: nota.cliente.email,
-      telefono: nota.cliente.telefono,
-      fechaVencimiento: nota.fechaVencimiento,
-      diasParaVencer,
-      importe: nota.importe,
-      saldoPendiente: nota.saldoPendiente,
-      enviado: false // Se puede agregar un campo para trackear si ya se envió
-    };
-  }).sort((a, b) => a.diasParaVencer - b.diasParaVencer);
-};
-
-// Transferencias Pendientes Confirmación
-exports.getTransferenciasPendientes = async () => {
-  const pagos = await prisma.pago.findMany({
-    where: {
-      estado: 'pendiente',
-      formasPago: {
-        some: {
-          formaPago: {
-            tipo: 'transferencia'
-          }
-        }
-      }
-    },
-    include: {
-      cliente: {
-        select: {
-          id: true,
-          nombre: true,
-          apellidoPaterno: true,
-          apellidoMaterno: true,
-          telefono: true
-        }
+        },
       },
-      formasPago: {
-        include: {
-          formaPago: {
-            select: {
-              nombre: true,
-              tipo: true
-            }
-          }
-        }
-      },
-      notaCredito: {
-        select: {
-          numeroNota: true
-        }
-      }
     },
-    orderBy: {
-      fechaCreacion: 'desc'
-    }
   });
 
-  return pagos.map(pago => {
-    const transferencias = pago.formasPago.filter(pfp => pfp.formaPago.tipo === 'transferencia');
-    
-    return {
-      id: pago.id,
-      cliente: `${pago.cliente.nombre} ${pago.cliente.apellidoPaterno} ${pago.cliente.apellidoMaterno || ''}`.trim(),
-      telefono: pago.cliente.telefono,
-      notaCredito: pago.notaCredito?.numeroNota || 'Abono General',
-      montoTotal: pago.montoTotal,
-      transferencias: transferencias.map(t => ({
-        monto: t.monto,
-        referencia: t.referencia,
-        banco: t.banco,
-        formaPago: t.formaPago.nombre
-      })),
-      fechaPago: pago.fechaPago,
-      fechaCreacion: pago.fechaCreacion,
-      usuarioRegistro: pago.usuarioRegistro
-    };
-  });
-};
+  const clientesExcedidos = [];
 
-// Clientes con Límite Excedido
-exports.getClientesLimiteExcedido = async () => {
-  const clientes = await prisma.cliente.findMany({
-    where: {
-      estadoCliente: 'activo'
-    },
-    include: {
-      notasCredito: {
-        where: {
-          estado: {
-            in: ['vigente', 'por_vencer', 'vencida']
-          }
-        }
-      },
-      ruta: {
-        select: {
-          nombre: true
-        }
-      }
-    }
-  });
+  clientes.forEach((cliente) => {
+    const limiteCredito = parseFloat(cliente.limiteCredito) || 0;
+    const saldoActual = parseFloat(cliente.saldoActual) || 0;
 
-  return clientes
-    .filter(cliente => cliente.saldoActual > cliente.limiteCredito)
-    .map(cliente => {
-      const exceso = cliente.saldoActual - cliente.limiteCredito;
-      const porcentajeExceso = cliente.limiteCredito > 0 
-        ? ((exceso / cliente.limiteCredito) * 100).toFixed(2)
-        : 0;
+    if (saldoActual > limiteCredito) {
+      const saldoNotas = cliente.notasCredito.reduce(
+        (sum, nota) => sum + (parseFloat(nota.saldoPendiente) || 0),
+        0
+      );
 
-      return {
-        id: cliente.id,
-        nombre: `${cliente.nombre} ${cliente.apellidoPaterno} ${cliente.apellidoMaterno || ''}`.trim(),
+      clientesExcedidos.push({
+        clienteId: cliente.id,
+        clienteNombre: `${cliente.nombre} ${cliente.apellidoPaterno} ${cliente.apellidoMaterno}`,
         telefono: cliente.telefono,
         ruta: cliente.ruta?.nombre || 'Sin ruta',
-        limiteCredito: cliente.limiteCredito,
-        saldoActual: cliente.saldoActual,
-        exceso,
-        porcentajeExceso: parseFloat(porcentajeExceso),
-        cantidadNotas: cliente.notasCredito.length,
-        totalNotas: cliente.notasCredito.reduce((sum, n) => sum + n.saldoPendiente, 0)
-      };
-    })
-    .sort((a, b) => b.exceso - a.exceso);
+        limiteCredito,
+        saldoActual,
+        saldoNotas,
+        exceso: saldoActual - limiteCredito,
+        porcentajeExceso: limiteCredito > 0 ? ((saldoActual - limiteCredito) / limiteCredito) * 100 : 0,
+      });
+    }
+  });
+
+  return clientesExcedidos.sort((a, b) => b.exceso - a.exceso);
 };
 
-// Comparativo Cartera vs Ventas
-exports.getComparativoCarteraVentas = async (fechaDesde, fechaHasta) => {
+// Comparativo cartera vs ventas
+exports.getComparativoCarteraVentas = async (fechaDesde, fechaHasta, sedeId) => {
   const wherePedidos = {
-    estado: 'entregado'
+    estado: 'entregado',
   };
+  const whereNotas = {};
 
   if (fechaDesde) {
     wherePedidos.fechaPedido = {
       ...wherePedidos.fechaPedido,
-      gte: new Date(fechaDesde)
+      gte: new Date(fechaDesde),
+    };
+    whereNotas.fechaVenta = {
+      ...whereNotas.fechaVenta,
+      gte: new Date(fechaDesde),
     };
   }
-
   if (fechaHasta) {
     wherePedidos.fechaPedido = {
       ...wherePedidos.fechaPedido,
-      lte: new Date(fechaHasta)
+      lte: new Date(fechaHasta),
+    };
+    whereNotas.fechaVenta = {
+      ...whereNotas.fechaVenta,
+      lte: new Date(fechaHasta),
+    };
+  }
+  if (sedeId) {
+    wherePedidos.sedeId = sedeId;
+    whereNotas.cliente = {
+      ruta: {
+        sedeId: sedeId,
+      },
     };
   }
 
   const pedidos = await prisma.pedido.findMany({
     where: wherePedidos,
     select: {
-      fechaPedido: true,
       ventaTotal: true,
-      montoPagado: true
-    }
+      fechaPedido: true,
+    },
   });
 
   const notasCredito = await prisma.notaCredito.findMany({
-    where: {
-      estado: {
-        in: ['vigente', 'por_vencer', 'vencida']
-      }
-    },
+    where: whereNotas,
     select: {
-      fechaVenta: true,
       importe: true,
-      saldoPendiente: true
-    }
+      saldoPendiente: true,
+      fechaVenta: true,
+    },
   });
 
-  const totalVentas = pedidos.reduce((sum, p) => sum + p.ventaTotal, 0);
-  const totalPagado = pedidos.reduce((sum, p) => sum + (p.montoPagado || 0), 0);
-  const totalCartera = notasCredito.reduce((sum, n) => sum + n.saldoPendiente, 0);
-  const totalCarteraVigente = notasCredito.reduce((sum, n) => sum + n.importe, 0);
+  const totalVentas = pedidos.reduce((sum, p) => sum + (parseFloat(p.ventaTotal) || 0), 0);
+  const totalCartera = notasCredito.reduce((sum, n) => sum + (parseFloat(n.importe) || 0), 0);
+  const carteraPendiente = notasCredito.reduce((sum, n) => sum + (parseFloat(n.saldoPendiente) || 0), 0);
+  const carteraPagada = totalCartera - carteraPendiente;
 
   return {
-    periodo: {
-      fechaDesde: fechaDesde || null,
-      fechaHasta: fechaHasta || null
-    },
-    ventas: {
-      total: totalVentas,
-      pagado: totalPagado,
-      pendiente: totalVentas - totalPagado
-    },
-    cartera: {
-      total: totalCartera,
-      vigente: totalCarteraVigente,
-      porcentajeSobreVentas: totalVentas > 0 ? ((totalCartera / totalVentas) * 100).toFixed(2) : 0
-    },
-    indicadores: {
-      ratioCobranza: totalVentas > 0 ? ((totalPagado / totalVentas) * 100).toFixed(2) : 0,
-      diasPromedioCartera: 0 // Se puede calcular basado en fechas
-    }
+    totalVentas,
+    totalCartera,
+    carteraPendiente,
+    carteraPagada,
+    porcentajeCobrado: totalCartera > 0 ? (carteraPagada / totalCartera) * 100 : 0,
+    porcentajePendiente: totalCartera > 0 ? (carteraPendiente / totalCartera) * 100 : 0,
   };
 };
 
-// Eficiencia de Cobranza por Repartidor
-exports.getEficienciaCobranzaRepartidor = async (fechaDesde, fechaHasta) => {
-  const where = {};
+// Eficiencia de cobranza por repartidor
+exports.getEficienciaCobranzaPorRepartidor = async (fechaDesde, fechaHasta, sedeId) => {
+  const where = {
+    estado: 'autorizado',
+  };
 
   if (fechaDesde) {
-    where.fechaCreacion = {
-      ...where.fechaCreacion,
-      gte: new Date(fechaDesde)
+    where.fechaPago = {
+      ...where.fechaPago,
+      gte: new Date(fechaDesde),
     };
   }
-
   if (fechaHasta) {
-    where.fechaCreacion = {
-      ...where.fechaCreacion,
-      lte: new Date(fechaHasta)
+    where.fechaPago = {
+      ...where.fechaPago,
+      lte: new Date(fechaHasta),
     };
   }
 
-  const repartidores = await prisma.usuario.findMany({
-    where: {
-      rol: 'repartidor',
-      estado: 'activo'
-    },
+  if (sedeId) {
+    where.cliente = {
+      ruta: {
+        sedeId: sedeId,
+      },
+    };
+  }
+
+  const pagos = await prisma.pago.findMany({
+    where,
     include: {
-      pedidos: {
-        where: {
-          estado: 'entregado',
-          ...where
-        },
-        include: {
-          cliente: {
-            include: {
-              notasCredito: {
-                where: {
-                  estado: {
-                    in: ['vigente', 'por_vencer', 'vencida']
-                  }
-                }
+      cliente: {
+        select: {
+          ruta: {
+            select: {
+              repartidores: {
+                select: {
+                  usuario: {
+                    select: {
+                      id: true,
+                      nombres: true,
+                      apellidoPaterno: true,
+                      apellidoMaterno: true,
+                    },
+                  },
+                },
               },
-              abonos: {
-                where
-              }
-            }
-          }
-        }
-      }
-    }
+            },
+          },
+        },
+      },
+    },
   });
 
-  return repartidores.map(repartidor => {
-    const clientes = repartidor.pedidos.map(p => p.cliente);
-    const clientesUnicos = [...new Map(clientes.map(c => [c.id, c])).values()];
+  const repartidoresMap = {};
 
-    const totalVentas = repartidor.pedidos.reduce((sum, p) => sum + p.ventaTotal, 0);
-    const totalCartera = clientesUnicos.reduce((sum, c) => {
-      return sum + c.notasCredito.reduce((s, n) => s + n.saldoPendiente, 0);
-    }, 0);
-    const totalCobrado = clientesUnicos.reduce((sum, c) => {
-      return sum + c.abonos.reduce((s, a) => s + a.monto, 0);
-    }, 0);
+  pagos.forEach((pago) => {
+    const repartidores = pago.cliente.ruta?.repartidores || [];
+    repartidores.forEach((ur) => {
+      const repartidorId = ur.usuario.id;
+      if (!repartidoresMap[repartidorId]) {
+        repartidoresMap[repartidorId] = {
+          repartidorId,
+          repartidorNombre: `${ur.usuario.nombres} ${ur.usuario.apellidoPaterno} ${ur.usuario.apellidoMaterno}`,
+          cantidadPagos: 0,
+          montoTotal: 0,
+        };
+      }
+      repartidoresMap[repartidorId].cantidadPagos += 1;
+      repartidoresMap[repartidorId].montoTotal += parseFloat(pago.montoTotal) || 0;
+    });
+  });
 
-    const eficiencia = totalVentas > 0 ? ((totalCobrado / totalVentas) * 100).toFixed(2) : 0;
-
-    return {
-      id: repartidor.id,
-      nombre: `${repartidor.nombres} ${repartidor.apellidoPaterno} ${repartidor.apellidoMaterno || ''}`.trim(),
-      totalVentas,
-      totalCartera,
-      totalCobrado,
-      eficiencia: parseFloat(eficiencia),
-      cantidadClientes: clientesUnicos.length,
-      cantidadPedidos: repartidor.pedidos.length
-    };
-  }).sort((a, b) => b.eficiencia - a.eficiencia);
+  return Object.values(repartidoresMap).sort((a, b) => b.montoTotal - a.montoTotal);
 };
 
-// Análisis de Tendencias de Pago
-exports.getTendenciasPago = async (meses = 12) => {
-  const hoy = new Date();
-  const fechaInicio = new Date();
-  fechaInicio.setMonth(hoy.getMonth() - meses);
+// Análisis de tendencias de pago
+exports.getAnalisisTendenciasPago = async (fechaDesde, fechaHasta, sedeId) => {
+  const where = {
+    estado: 'autorizado',
+  };
 
-  const abonos = await prisma.abonoCliente.findMany({
-    where: {
-      fecha: {
-        gte: fechaInicio
-      }
-    },
+  if (fechaDesde) {
+    where.fechaPago = {
+      ...where.fechaPago,
+      gte: new Date(fechaDesde),
+    };
+  }
+  if (fechaHasta) {
+    where.fechaPago = {
+      ...where.fechaPago,
+      lte: new Date(fechaHasta),
+    };
+  }
+
+  if (sedeId) {
+    where.cliente = {
+      ruta: {
+        sedeId: sedeId,
+      },
+    };
+  }
+
+  const pagos = await prisma.pago.findMany({
+    where,
     select: {
-      fecha: true,
-      monto: true,
-      formaPago: {
-        select: {
-          tipo: true,
-          nombre: true
-        }
-      }
-    }
+      fechaPago: true,
+      montoTotal: true,
+    },
   });
 
-  const tendencias = {};
-  
-  abonos.forEach(abono => {
-    const fecha = new Date(abono.fecha);
+  // Agrupar por mes
+  const tendenciasPorMes = {};
+  pagos.forEach((pago) => {
+    const fecha = new Date(pago.fechaPago);
     const mes = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
-    const mesNombre = fecha.toLocaleString('es-MX', { month: 'long', year: 'numeric' });
+    const nombreMes = fecha.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
     
-    if (!tendencias[mes]) {
-      tendencias[mes] = {
-        mes,
-        mesNombre,
-        total: 0,
-        porFormaPago: {}
+    if (!tendenciasPorMes[mes]) {
+      tendenciasPorMes[mes] = {
+        mes: nombreMes,
+        cantidadPagos: 0,
+        montoTotal: 0,
       };
     }
-    
-    tendencias[mes].total += abono.monto;
-    const tipoPago = abono.formaPago.tipo;
-    if (!tendencias[mes].porFormaPago[tipoPago]) {
-      tendencias[mes].porFormaPago[tipoPago] = 0;
-    }
-    tendencias[mes].porFormaPago[tipoPago] += abono.monto;
+    tendenciasPorMes[mes].cantidadPagos += 1;
+    tendenciasPorMes[mes].montoTotal += parseFloat(pago.montoTotal) || 0;
   });
 
-  return Object.values(tendencias).sort((a, b) => a.mes.localeCompare(b.mes));
+  return Object.values(tendenciasPorMes).sort((a, b) => {
+    const fechaA = new Date(a.mes);
+    const fechaB = new Date(b.mes);
+    return fechaA - fechaB;
+  });
 };
 
-// Proyección de Flujo de Caja
-exports.getProyeccionFlujoCaja = async (meses = 6) => {
+// Proyección de flujo de caja
+exports.getProyeccionFlujoCaja = async (sedeId) => {
   const hoy = new Date();
-  const proyeccion = [];
+  const proximos30Dias = new Date();
+  proximos30Dias.setDate(hoy.getDate() + 30);
 
-  // Obtener notas de crédito vigentes
-  const notasCredito = await prisma.notaCredito.findMany({
-    where: {
-      estado: {
-        in: ['vigente', 'por_vencer']
-      }
+  const where = {
+    estado: {
+      in: ['vigente', 'por_vencer'],
     },
-    select: {
-      fechaVencimiento: true,
-      saldoPendiente: true
-    }
-  });
-
-  // Obtener abonos históricos para calcular promedio
-  const fechaInicio = new Date();
-  fechaInicio.setMonth(hoy.getMonth() - 6);
-  
-  const abonosHistoricos = await prisma.abonoCliente.findMany({
-    where: {
-      fecha: {
-        gte: fechaInicio
-      }
+    fechaVencimiento: {
+      lte: proximos30Dias,
+      gte: hoy,
     },
-    select: {
-      fecha: true,
-      monto: true
-    }
-  });
+  };
 
-  const promedioMensual = abonosHistoricos.length > 0
-    ? abonosHistoricos.reduce((sum, a) => sum + a.monto, 0) / 6
-    : 0;
-
-  // Proyectar mes a mes
-  for (let i = 0; i < meses; i++) {
-    const fechaProyeccion = new Date();
-    fechaProyeccion.setMonth(hoy.getMonth() + i);
-    const mes = `${fechaProyeccion.getFullYear()}-${String(fechaProyeccion.getMonth() + 1).padStart(2, '0')}`;
-    const mesNombre = fechaProyeccion.toLocaleString('es-MX', { month: 'long', year: 'numeric' });
-
-    // Calcular vencimientos esperados en este mes
-    const vencimientosEsperados = notasCredito
-      .filter(n => {
-        const fechaVenc = new Date(n.fechaVencimiento);
-        return fechaVenc.getFullYear() === fechaProyeccion.getFullYear() &&
-               fechaVenc.getMonth() === fechaProyeccion.getMonth();
-      })
-      .reduce((sum, n) => sum + n.saldoPendiente, 0);
-
-    proyeccion.push({
-      mes,
-      mesNombre,
-      vencimientosEsperados,
-      cobranzaProyectada: promedioMensual,
-      diferencia: promedioMensual - vencimientosEsperados
-    });
+  if (sedeId) {
+    where.cliente = {
+      ruta: {
+        sedeId: sedeId,
+      },
+    };
   }
 
-  return proyeccion;
+  const notasCredito = await prisma.notaCredito.findMany({
+    where,
+    select: {
+      fechaVencimiento: true,
+      saldoPendiente: true,
+    },
+  });
+
+  // Agrupar por semana
+  const proyeccionPorSemana = {};
+  notasCredito.forEach((nota) => {
+    const fechaVenc = new Date(nota.fechaVencimiento);
+    const semana = `Semana ${Math.ceil((fechaVenc.getDate() - hoy.getDate()) / 7)}`;
+    
+    if (!proyeccionPorSemana[semana]) {
+      proyeccionPorSemana[semana] = {
+        semana,
+        montoEsperado: 0,
+        cantidadNotas: 0,
+      };
+    }
+    proyeccionPorSemana[semana].montoEsperado += parseFloat(nota.saldoPendiente) || 0;
+    proyeccionPorSemana[semana].cantidadNotas += 1;
+  });
+
+  return Object.values(proyeccionPorSemana);
 };
 
