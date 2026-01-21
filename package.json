@@ -52,6 +52,7 @@
     "qrcode": "^1.5.4",
     "react-leaflet": "^5.0.0",
     "react-native-maps": "^1.26.20",
+    "react-native-thermal-receipt-printer": "^1.2.0-rc.2",
     "socket.io": "^4.8.1",
     "speakeasy": "^2.0.0",
     "swagger-jsdoc": "^6.2.8",

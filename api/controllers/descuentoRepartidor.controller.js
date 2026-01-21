@@ -26,17 +26,14 @@ exports.getDescuentoById = async (req, res, next) => {
     }
 };
 
-// Obtener descuento por repartidor
+// Obtener descuentos por repartidor (ahora retorna una lista)
 exports.getDescuentoByRepartidor = async (req, res, next) => {
     try {
         const { repartidorId } = req.params;
-        const descuento = await descuentoRepartidorService.findDescuentoByRepartidor(repartidorId);
+        const descuentos = await descuentoRepartidorService.findDescuentoByRepartidor(repartidorId);
         
-        if (!descuento) {
-            return res.status(404).json({ message: 'Descuento no encontrado para este repartidor.' });
-        }
-
-        res.status(200).json(descuento);
+        // Retornar lista vacía si no hay descuentos en lugar de error 404
+        res.status(200).json(descuentos || []);
     } catch (error) {
         next(error);
     }

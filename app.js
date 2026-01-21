@@ -24,10 +24,12 @@ const pedidoRoutes = require('./api/routes/pedido.routes');
 const creditoAbonoRoutes = require('./api/routes/creditoAbono.routes');
 const newsletterRoutes = require('./api/routes/newsletter.routes');
 const configuracionRoutes = require('./api/routes/configuracion.routes');
+const configuracionTicketRoutes = require('./api/routes/configuracionTicket.routes');
 const descuentoRepartidorRoutes = require('./api/routes/descuentoRepartidor.routes');
 const categoriaProductoRoutes = require('./api/routes/categoriaProducto.routes');
 const reporteRoutes = require('./api/routes/reporte.routes');
 const reporteFinancieroRoutes = require('./api/routes/reporteFinanciero.routes');
+const corteCajaRoutes = require('./api/routes/corteCaja.routes');
 
 // Inicialización de Express
 const app = express();
@@ -70,9 +72,34 @@ if (config.nodeEnv === 'development') {
 }
 
 
+// Middleware de logging global para todas las peticiones
+app.use((req, res, next) => {
+    console.log(`[GLOBAL] ${req.method} ${req.originalUrl}`, {
+        headers: req.headers.authorization ? 'has auth' : 'no auth',
+        contentType: req.headers['content-type'],
+        origin: req.headers.origin
+    });
+    next();
+});
+
+// Manejar preflight OPTIONS explícitamente
+app.options('*', (req, res) => {
+    console.log(`[OPTIONS] Preflight request: ${req.originalUrl}`);
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.sendStatus(200);
+});
+
 // Rutas de la API
 app.get('/', (req, res) => {
     res.json({ message: `Bienvenido a la API de ${config.appName}` });
+});
+
+// Ruta de prueba para verificar que el servidor está funcionando
+app.get('/api/test', (req, res) => {
+    res.json({ message: 'Backend funcionando correctamente', timestamp: new Date().toISOString() });
 });
 app.use('/api/usuarios', usuarioRoutes);
 app.use('/api/sedes', sedeRoutes);
@@ -86,13 +113,18 @@ app.use('/api/pedidos', pedidoRoutes);
 app.use('/api/creditos-abonos', creditoAbonoRoutes);
 app.use('/api/newsletter', newsletterRoutes);
 app.use('/api/configuraciones', configuracionRoutes);
+app.use('/api/configuracion-tickets', configuracionTicketRoutes);
 app.use('/api/descuentos-repartidor', descuentoRepartidorRoutes);
 app.use('/api/categorias-producto', categoriaProductoRoutes);
 app.use('/api/reportes', reporteRoutes);
 app.use('/api/reportes-financieros', reporteFinancieroRoutes);
+app.use('/api/cortes-caja', corteCajaRoutes);
 
 // Middleware para manejar rutas no encontradas (404)
 app.use((req, res, next) => {
+    console.log(`[404] Ruta no encontrada: ${req.method} ${req.originalUrl}`);
+    console.log(`[404] Headers:`, req.headers);
+    console.log(`[404] Body:`, req.body);
     const error = new Error('Ruta no encontrada');
     error.status = 404;
     next(error);

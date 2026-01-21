@@ -24,7 +24,7 @@ model Usuario {
   fechaRegistro          DateTime                 @default(now())
   createdAt              DateTime                 @default(now()) @map("created_at")
   updatedAt              DateTime                 @updatedAt @map("updated_at")
-  descuentosRepartidor   DescuentoRepartidor?
+  descuentosRepartidor   DescuentoRepartidor[]
   historialLimiteCredito HistorialLimiteCredito[]
   pedidos                Pedido[]
   rutas                  UsuarioRuta[]
@@ -98,7 +98,7 @@ model FormaPagoSede {
 
 model TipoFormaPagoConfig {
   id                String   @id @default(uuid())
-  codigo            String   @unique @db.VarChar(50)
+  codigo            String   @db.VarChar(50)
   nombre            String   @db.VarChar(255)
   descripcion       String?  @db.VarChar(500)
   activo            Boolean  @default(true)
@@ -497,9 +497,50 @@ model Configuracion {
   @@map("configuraciones")
 }
 
+model ConfiguracionTicket {
+  id                      String   @id @default(uuid())
+  tipoTicket              String   @default("venta") @db.VarChar(50) @map("tipo_ticket")
+  nombreEmpresa           String   @db.VarChar(255) @map("nombre_empresa")
+  razonSocial             String?  @db.VarChar(500) @map("razon_social")
+  direccion               String?  @db.VarChar(500)
+  telefono                String?  @db.VarChar(50)
+  email                   String?  @db.VarChar(255)
+  sitioWeb                String?  @db.VarChar(255) @map("sitio_web")
+  rfc                     String?  @db.VarChar(20)
+  logo                    String?  @db.Text
+  mostrarLogo             Boolean  @default(true) @map("mostrar_logo")
+  tamañoLogo              String   @default("mediano") @db.VarChar(20) @map("tamaño_logo")
+  redesSocialesFacebook   String?  @db.VarChar(255) @map("redes_sociales_facebook")
+  redesSocialesInstagram  String?  @db.VarChar(255) @map("redes_sociales_instagram")
+  redesSocialesTwitter    String?  @db.VarChar(255) @map("redes_sociales_twitter")
+  redesSocialesLinkedin   String?  @db.VarChar(255) @map("redes_sociales_linkedin")
+  redesSocialesWhatsapp   String?  @db.VarChar(255) @map("redes_sociales_whatsapp")
+  mostrarRedesSociales    Boolean  @default(true) @map("mostrar_redes_sociales")
+  textoEncabezado         String?  @db.VarChar(500) @map("texto_encabezado")
+  textoPiePagina          String?  @db.VarChar(500) @map("texto_pie_pagina")
+  mensajeEspecial         String?  @db.VarChar(1000) @map("mensaje_especial")
+  mostrarMensajeEspecial   Boolean  @default(false) @map("mostrar_mensaje_especial")
+  mostrarFecha            Boolean  @default(true) @map("mostrar_fecha")
+  mostrarHora             Boolean  @default(true) @map("mostrar_hora")
+  mostrarCajero           Boolean  @default(true) @map("mostrar_cajero")
+  mostrarCliente           Boolean  @default(true) @map("mostrar_cliente")
+  colorPrincipal           String   @default("#1976d2") @db.VarChar(20) @map("color_principal")
+  alineacion               String   @default("centro") @db.VarChar(20)
+  activo                   Boolean  @default(true)
+  fechaCreacion            DateTime @default(now()) @map("fecha_creacion")
+  fechaModificacion        DateTime @updatedAt @map("fecha_modificacion")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+
+  @@unique([tipoTicket])
+  @@map("configuracion_tickets")
+}
+
 model DescuentoRepartidor {
   id                  String   @id @default(uuid())
-  repartidorId        String   @unique @map("repartidor_id")
+  repartidorId        String   @map("repartidor_id")
+  nombre              String?  @db.VarChar(255)
+  descripcion         String?  @db.VarChar(500)
   descuentoAutorizado Float    @default(0) @map("descuento_autorizado")
   descuentoPorLitro   Float?   @map("descuento_por_litro")
   activo              Boolean  @default(true)

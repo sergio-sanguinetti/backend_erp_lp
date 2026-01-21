@@ -64,16 +64,16 @@ exports.findTipoFormaPagoByCodigo = async (codigo) => {
 
 // Crear nuevo tipo de forma de pago
 exports.createTipoFormaPago = async (tipoData) => {
-  // Verificar que el código no exista
-  const tipoExistente = await prisma.tipoFormaPagoConfig.findUnique({
-    where: { codigo: tipoData.codigo }
-  })
+  // Validación de código duplicado deshabilitada - se permite códigos libres y duplicados
+  // const tipoExistente = await prisma.tipoFormaPagoConfig.findUnique({
+  //   where: { codigo: tipoData.codigo }
+  // })
 
-  if (tipoExistente) {
-    const error = new Error('Ya existe un tipo de forma de pago con este código.')
-    error.status = 400
-    throw error
-  }
+  // if (tipoExistente) {
+  //   const error = new Error('Ya existe un tipo de forma de pago con este código.')
+  //   error.status = 400
+  //   throw error
+  // }
 
   return await prisma.tipoFormaPagoConfig.create({
     data: {
@@ -100,18 +100,18 @@ exports.updateTipoFormaPago = async (id, updateData) => {
     throw error
   }
 
-  // Si se actualiza el código, verificar que no exista otro con el mismo código
-  if (updateData.codigo && updateData.codigo !== tipoExistente.codigo) {
-    const tipoConCodigo = await prisma.tipoFormaPagoConfig.findUnique({
-      where: { codigo: updateData.codigo }
-    })
+  // Validación de código duplicado deshabilitada - se permite códigos libres y duplicados
+  // if (updateData.codigo && updateData.codigo !== tipoExistente.codigo) {
+  //   const tipoConCodigo = await prisma.tipoFormaPagoConfig.findUnique({
+  //     where: { codigo: updateData.codigo }
+  //   })
 
-    if (tipoConCodigo) {
-      const error = new Error('Ya existe otro tipo de forma de pago con este código.')
-      error.status = 400
-      throw error
-    }
-  }
+  //   if (tipoConCodigo) {
+  //     const error = new Error('Ya existe otro tipo de forma de pago con este código.')
+  //     error.status = 400
+  //     throw error
+  //   }
+  // }
 
   const dataToUpdate = {}
   if (updateData.codigo !== undefined) dataToUpdate.codigo = updateData.codigo

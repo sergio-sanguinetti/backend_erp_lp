@@ -19,3 +19,4 @@ router.get('/resumen-general', reporteController.getResumenGeneral);
 
 module.exports = router;
 
+

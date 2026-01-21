@@ -759,3 +759,4 @@ exports.getProyeccionFlujoCaja = async (sedeId) => {
   return Object.values(proyeccionPorSemana);
 };
 
+

@@ -32,14 +32,17 @@ exports.findDescuentoById = async (id) => {
 };
 
 exports.findDescuentoByRepartidor = async (repartidorId) => {
-  const descuento = await prisma.descuentoRepartidor.findUnique({
+  const descuentos = await prisma.descuentoRepartidor.findMany({
     where: { repartidorId },
     include: {
       repartidor: true
+    },
+    orderBy: {
+      fechaCreacion: 'desc'
     }
   });
 
-  return descuento;
+  return descuentos;
 };
 
 exports.createDescuento = async (descuentoData) => {
@@ -54,20 +57,13 @@ exports.createDescuento = async (descuentoData) => {
     throw error;
   }
 
-  // Verificar si ya existe un descuento para este repartidor
-  const descuentoExistente = await prisma.descuentoRepartidor.findUnique({
-    where: { repartidorId: descuentoData.repartidorId }
-  });
-
-  if (descuentoExistente) {
-    const error = new Error('Ya existe un descuento para este repartidor.');
-    error.status = 409;
-    throw error;
-  }
+  // Permitir múltiples descuentos por repartidor - validación de duplicados eliminada
 
   const nuevoDescuento = await prisma.descuentoRepartidor.create({
     data: {
       repartidorId: descuentoData.repartidorId,
+      nombre: descuentoData.nombre || null,
+      descripcion: descuentoData.descripcion || null,
       descuentoAutorizado: descuentoData.descuentoAutorizado || 0,
       descuentoPorLitro: descuentoData.descuentoPorLitro || null,
       activo: descuentoData.activo !== undefined ? descuentoData.activo : true
@@ -95,6 +91,8 @@ exports.updateDescuento = async (id, updateData) => {
   const descuentoActualizado = await prisma.descuentoRepartidor.update({
     where: { id },
     data: {
+      nombre: updateData.nombre !== undefined ? updateData.nombre : descuentoExistente.nombre,
+      descripcion: updateData.descripcion !== undefined ? updateData.descripcion : descuentoExistente.descripcion,
       descuentoAutorizado: updateData.descuentoAutorizado !== undefined ? updateData.descuentoAutorizado : descuentoExistente.descuentoAutorizado,
       descuentoPorLitro: updateData.descuentoPorLitro !== undefined ? updateData.descuentoPorLitro : descuentoExistente.descuentoPorLitro,
       activo: updateData.activo !== undefined ? updateData.activo : descuentoExistente.activo
