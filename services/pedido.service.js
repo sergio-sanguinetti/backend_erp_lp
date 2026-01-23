@@ -149,6 +149,14 @@ exports.getAllPedidos = async (filtros = {}) => {
             }
           }
         }
+      },
+      pagos: {
+        include: {
+          metodo: true
+        },
+        orderBy: {
+          fecha: 'desc'
+        }
       }
     },
     orderBy: { fechaCreacion: 'desc' }
@@ -193,6 +201,14 @@ exports.findPedidoById = async (id) => {
       productosPedido: {
         include: {
           producto: true
+        }
+      },
+      pagos: {
+        include: {
+          metodo: true
+        },
+        orderBy: {
+          fecha: 'desc'
         }
       }
     }

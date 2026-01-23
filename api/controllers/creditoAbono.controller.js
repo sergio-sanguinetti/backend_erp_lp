@@ -144,7 +144,8 @@ exports.createPago = async (req, res, next) => {
       usuarioRegistro: req.user.id,
       usuarioAutorizacion: req.body.usuarioAutorizacion,
       estado: req.body.estado || 'pendiente',
-      formasPago: req.body.formasPago
+      formasPago: req.body.formasPago,
+      firmaCliente: req.body.firmaCliente || null // Agregar firma del cliente si existe
     };
 
     const pago = await creditoAbonoService.createPago(pagoData);

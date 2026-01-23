@@ -324,6 +324,50 @@ exports.updateProfile = async (req, res, next) => {
     }
 };
 
+// Cambiar contraseña del usuario actual
+exports.changePassword = async (req, res, next) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        const userId = req.user.id;
+
+        // Validar que se proporcionen ambos campos
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ message: 'Por favor, proporcione la contraseña actual y la nueva contraseña.' });
+        }
+
+        // Validar que la nueva contraseña tenga al menos 6 caracteres
+        if (newPassword.length < 6) {
+            return res.status(400).json({ message: 'La nueva contraseña debe tener al menos 6 caracteres.' });
+        }
+
+        // Obtener el usuario actual
+        const usuario = await usuarioService.findUsuarioById(userId);
+        if (!usuario) {
+            return res.status(404).json({ message: 'Usuario no encontrado.' });
+        }
+
+        // Verificar que la contraseña actual sea correcta
+        const isPasswordValid = await usuarioService.comparePassword(currentPassword, usuario.password);
+        if (!isPasswordValid) {
+            return res.status(401).json({ message: 'La contraseña actual es incorrecta.' });
+        }
+
+        // Verificar que la nueva contraseña sea diferente a la actual
+        if (currentPassword === newPassword) {
+            return res.status(400).json({ message: 'La nueva contraseña debe ser diferente a la actual.' });
+        }
+
+        // Actualizar la contraseña
+        await usuarioService.updateUsuario(userId, { password: newPassword });
+
+        res.status(200).json({
+            message: 'Contraseña actualizada exitosamente.'
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 // Obtener usuario por ID (solo administradores)
 exports.getUsuarioById = async (req, res, next) => {
     try {

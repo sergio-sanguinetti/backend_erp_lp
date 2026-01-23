@@ -128,13 +128,16 @@ exports.findClienteById = async (id) => {
 
 exports.getAllClientes = async (filtros = {}) => {
     const where = {};
+    const andConditions = [];
 
     if (filtros.nombre) {
-        where.OR = [
-            { nombre: { contains: filtros.nombre } },
-            { apellidoPaterno: { contains: filtros.nombre } },
-            { apellidoMaterno: { contains: filtros.nombre } }
-        ];
+        andConditions.push({
+            OR: [
+                { nombre: { contains: filtros.nombre } },
+                { apellidoPaterno: { contains: filtros.nombre } },
+                { apellidoMaterno: { contains: filtros.nombre } }
+            ]
+        });
     }
 
     if (filtros.email) {
@@ -150,6 +153,7 @@ exports.getAllClientes = async (filtros = {}) => {
     }
 
     // Filtrar por sede: buscar clientes cuyas rutas pertenezcan a la sede
+    // También incluir clientes sin ruta asignada
     if (filtros.sedeId) {
         // Buscar todas las rutas de la sede
         const rutasDeSede = await prisma.ruta.findMany({
@@ -160,11 +164,22 @@ exports.getAllClientes = async (filtros = {}) => {
         const rutasIds = rutasDeSede.map(r => r.id);
         
         if (rutasIds.length > 0) {
-            where.rutaId = { in: rutasIds };
+            // Incluir clientes con rutas de la sede O clientes sin ruta asignada
+            andConditions.push({
+                OR: [
+                    { rutaId: { in: rutasIds } },
+                    { rutaId: null }
+                ]
+            });
         } else {
-            // Si no hay rutas para esta sede, retornar array vacío
-            return [];
+            // Si no hay rutas para esta sede, mostrar solo clientes sin ruta
+            andConditions.push({ rutaId: null });
         }
+    }
+
+    // Combinar todas las condiciones AND
+    if (andConditions.length > 0) {
+        where.AND = andConditions;
     }
 
     // Manejar el caso donde email puede ser null en la BD pero el schema espera String

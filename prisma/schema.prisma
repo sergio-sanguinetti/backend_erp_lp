@@ -78,6 +78,7 @@ model FormaPago {
   sede                Sede?           @relation(fields: [sedeId], references: [id])
   sedes               FormaPagoSede[]
   pagosFormaPago      PagoFormaPago[]
+  pagosPedido         PagoPedido[]
 
   @@index([sedeId], map: "formas_pago_sede_id_fkey")
   @@map("formas_pago")
@@ -554,16 +555,19 @@ model DescuentoRepartidor {
 }
 
 model PagoPedido {
-  id       String         @id @default(uuid())
-  pedidoId String         @map("pedido_id")
-  monto    Float
-  folio    String?        @db.VarChar(255)
-  tipo     TipoPagoPedido
-  metodoId String?        @map("metodo_id")
-  fecha    DateTime       @default(now())
-  pedido   Pedido         @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  id           String         @id @default(uuid())
+  pedidoId     String         @map("pedido_id")
+  monto        Float
+  folio        String?        @db.VarChar(255)
+  tipo         TipoPagoPedido
+  metodoId     String?        @map("metodo_id")
+  fecha        DateTime       @default(now())
+  firmaCliente String?        @map("firma_cliente") @db.Text
+  pedido       Pedido         @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  metodo       FormaPago?     @relation(fields: [metodoId], references: [id], onDelete: SetNull)
 
   @@index([pedidoId], map: "pagos_pedidos_pedido_id_fkey")
+  @@index([metodoId], map: "pagos_pedidos_metodo_id_fkey")
   @@map("pagos_pedidos")
 }
 

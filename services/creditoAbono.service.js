@@ -322,7 +322,8 @@ exports.createPago = async (pagoData) => {
             monto: parseFloat(fp.monto),
             folio: fp.referencia || null,
             tipo: fp.tipo === 'credito' ? 'credito' : 'metodo_pago',
-            metodoId: fp.formaPagoId || null
+            metodoId: fp.formaPagoId || null,
+            firmaCliente: fp.firmaCliente || null // Guardar la firma del cliente si existe
           }
         });
 

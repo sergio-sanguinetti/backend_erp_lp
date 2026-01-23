@@ -16,6 +16,7 @@ router.post('/login/verify-2fa', protect, usuarioController.verifyLogin2FA);
 // Rutas protegidas (requieren token de sesión válido)
 router.get('/profile', protect, usuarioController.getProfile);
 router.put('/profile', protect, usuarioController.updateProfile);
+router.post('/change-password', protect, usuarioController.changePassword);
 router.post('/2fa/setup', protect, usuarioController.setup2FA);
 router.post('/2fa/enable', protect, usuarioController.verifyAndEnable2FA);
 router.post('/2fa/disable', protect, usuarioController.disable2FA);
