@@ -65,8 +65,9 @@ const corsOptions = {
 // Middlewares
 app.use(cors(corsOptions)); // Habilita CORS con configuración específica
 app.use(helmet()); // Añade cabeceras de seguridad
-app.use(express.json()); // Para parsear JSON en el body
-app.use(express.urlencoded({ extended: true })); // Para parsear bodies de formularios
+// Límite de 20MB para permitir subida de imágenes en base64 (newsletter, etc.)
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 if (config.nodeEnv === 'development') {
     app.use(morgan('dev')); // Logger de peticiones en desarrollo
 }

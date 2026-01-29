@@ -7,7 +7,8 @@ exports.getAllClientes = async (req, res, next) => {
             nombre: req.query.nombre,
             email: req.query.email,
             estadoCliente: req.query.estadoCliente,
-            rutaId: req.query.rutaId
+            rutaId: req.query.rutaId,
+            sedeId: req.query.sedeId
         };
         const clientes = await clienteService.getAllClientes(filtros);
         res.status(200).json(clientes);
@@ -141,6 +142,37 @@ exports.deleteDomicilio = async (req, res, next) => {
         
         res.status(200).json({
             message: 'Domicilio eliminado exitosamente.'
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Subida masiva de clientes desde Excel/CSV
+exports.importarClientesMasivo = async (req, res, next) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ 
+                message: 'No se proporcionó ningún archivo.' 
+            });
+        }
+
+        const resultados = await clienteService.importarClientesMasivo(
+            req.file.buffer,
+            req.file.originalname
+        );
+
+        res.status(200).json({
+            message: 'Importación completada.',
+            resultados: {
+                total: resultados.total,
+                exitosos: resultados.exitosos.length,
+                errores: resultados.errores.length,
+                detalles: {
+                    exitosos: resultados.exitosos,
+                    errores: resultados.errores
+                }
+            }
         });
     } catch (error) {
         next(error);

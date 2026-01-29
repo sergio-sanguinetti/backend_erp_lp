@@ -472,7 +472,7 @@ model NewsletterItem {
   title               String?            @db.VarChar(255)
   content             String?            @db.Text
   description         String?            @db.VarChar(500)
-  imageUrl            String?            @db.Text
+  imageUrl            String?            @db.LongText
   fechaVencimiento    DateTime?          @map("fecha_vencimiento")
   size                TamañoNewsletter? @default(medium)
   activo              Boolean            @default(true)

@@ -1,4 +1,5 @@
 const { prisma } = require('../config/database');
+const { getMexicoCityDayBounds } = require('../utils/timezoneMexico');
 
 // Generar número de pedido único
 const generarNumeroPedido = async () => {
@@ -28,17 +29,19 @@ const generarNumeroPedido = async () => {
 exports.getAllPedidos = async (filtros = {}) => {
   const where = {};
   
+  // Fechas interpretadas en zona horaria Ciudad de México para el "día" correcto
   if (filtros.fechaDesde) {
+    const { start } = getMexicoCityDayBounds(filtros.fechaDesde);
     where.fechaPedido = {
       ...where.fechaPedido,
-      gte: new Date(filtros.fechaDesde)
+      gte: start
     };
   }
-  
   if (filtros.fechaHasta) {
+    const { end } = getMexicoCityDayBounds(filtros.fechaHasta);
     where.fechaPedido = {
       ...where.fechaPedido,
-      lte: new Date(filtros.fechaHasta)
+      lte: end
     };
   }
   
@@ -377,22 +380,26 @@ exports.updatePedido = async (id, updateData) => {
   const pedidoExistente = await prisma.pedido.findUnique({
     where: { id }
   });
-  
+
   if (!pedidoExistente) {
     const error = new Error('Pedido no encontrado.');
     error.status = 404;
     throw error;
   }
-  
+
+  // Extraer productos del payload (no es un campo directo del modelo Pedido)
+  const productos = updateData.productos;
+  delete updateData.productos;
+
   // Convertir fechaPedido a DateTime si viene como string
   if (updateData.fechaPedido && typeof updateData.fechaPedido === 'string') {
     updateData.fechaPedido = new Date(updateData.fechaPedido);
   }
-  
-  // Recalcular ventaTotal si se actualizan productos
-  if (updateData.productos) {
-    updateData.cantidadProductos = updateData.productos.length;
-    updateData.ventaTotal = updateData.productos.reduce((sum, p) => sum + (p.precio * p.cantidad), 0);
+
+  // Recalcular ventaTotal y cantidadProductos si se actualizan productos
+  if (productos && Array.isArray(productos)) {
+    updateData.cantidadProductos = productos.length;
+    updateData.ventaTotal = productos.reduce((sum, p) => sum + (p.precio * p.cantidad), 0);
   }
 
   // Stringify calculoPipas y formasPago si vienen como objetos
@@ -402,17 +409,47 @@ exports.updatePedido = async (id, updateData) => {
   if (updateData.formasPago && typeof updateData.formasPago !== 'string') {
     updateData.formasPago = JSON.stringify(updateData.formasPago);
   }
-  
-  return await prisma.pedido.update({
-    where: { id },
-    data: updateData,
-    include: {
-      cliente: true,
-      ruta: true,
-      repartidor: true,
-      sede: true
+
+  const resultado = await prisma.$transaction(async (tx) => {
+    const pedidoActualizado = await tx.pedido.update({
+      where: { id },
+      data: updateData,
+      include: {
+        cliente: true,
+        ruta: true,
+        repartidor: true,
+        sede: true
+      }
+    });
+
+    if (productos && Array.isArray(productos)) {
+      await tx.pedidoProducto.deleteMany({ where: { pedidoId: id } });
+      if (productos.length > 0) {
+        await tx.pedidoProducto.createMany({
+          data: productos.map((p) => ({
+            pedidoId: id,
+            productoId: p.productoId,
+            cantidad: Math.round(Number(p.cantidad)) || 0,
+            precio: Number(p.precio) || 0,
+            subtotal: (Number(p.precio) || 0) * (Math.round(Number(p.cantidad)) || 0)
+          }))
+        });
+      }
     }
+
+    return tx.pedido.findUnique({
+      where: { id },
+      include: {
+        cliente: true,
+        ruta: true,
+        repartidor: true,
+        sede: true,
+        productosPedido: { include: { producto: true } }
+      }
+    });
   });
+
+  return resultado;
 };
 
 // Eliminar pedido

@@ -2,6 +2,19 @@
 
 const { prisma } = require('../config/database');
 
+// Tabla de mapeo de rutas Excel a códigos del sistema
+const MAPEO_RUTAS = {
+  'RUTA P 1DH': 'R1PDH',
+  'RUTA P 1SMA': 'R1PSMA',
+  'RUTA P 2DH': 'R2PDH',
+  'RUTA P 2SMA': 'R2PSMA',
+  'RUTA P 3DH': 'R3PDH',
+  'R C 1DH': 'R1CDH',
+  'R C 1SMA': 'R1CSMA',
+  'R C 2DH': 'R2CDH',
+  'R C 3SMA': 'R3CSMA'
+};
+
 // Función para generar código QR único
 const generarCodigoQR = (clienteId, index) => {
   // Usar los últimos 3 caracteres del ID del cliente o un número
@@ -316,6 +329,223 @@ exports.deleteCliente = async (id) => {
     });
 };
 
+// Función para obtener el código del sistema a partir de la ruta Excel
+const obtenerCodigoRuta = (rutaExcel) => {
+    // Limpiar espacios y convertir a mayúsculas
+    const rutaLimpia = rutaExcel.trim().toUpperCase();
+    return MAPEO_RUTAS[rutaLimpia] || null;
+};
+
+// Función para buscar ruta por código
+const buscarRutaPorCodigo = async (codigo) => {
+    const ruta = await prisma.ruta.findUnique({
+        where: { codigo },
+        select: {
+            id: true,
+            zonaId: true,
+            codigo: true,
+            nombre: true
+        }
+    });
+    return ruta;
+};
+
+// Función para dividir el nombre completo en partes
+const dividirNombre = (nombreCompleto) => {
+    if (!nombreCompleto || typeof nombreCompleto !== 'string') {
+        return {
+            nombre: '',
+            apellidoPaterno: '',
+            apellidoMaterno: ''
+        };
+    }
+
+    const partes = nombreCompleto.trim().split(/\s+/);
+    
+    if (partes.length === 0) {
+        return {
+            nombre: '',
+            apellidoPaterno: '',
+            apellidoMaterno: ''
+        };
+    }
+
+    if (partes.length === 1) {
+        return {
+            nombre: partes[0],
+            apellidoPaterno: '',
+            apellidoMaterno: ''
+        };
+    }
+
+    if (partes.length === 2) {
+        return {
+            nombre: partes[0],
+            apellidoPaterno: partes[1],
+            apellidoMaterno: ''
+        };
+    }
+
+    // Si hay 3 o más partes, tomar la primera como nombre y las demás como apellidos
+    return {
+        nombre: partes[0],
+        apellidoPaterno: partes.slice(1, -1).join(' ') || partes[1] || '',
+        apellidoMaterno: partes[partes.length - 1] || ''
+    };
+};
+
+// Subida masiva de clientes desde Excel/CSV
+exports.importarClientesMasivo = async (archivoBuffer, nombreArchivo) => {
+    const XLSX = require('xlsx');
+    const resultados = {
+        exitosos: [],
+        errores: [],
+        total: 0
+    };
+
+    try {
+        // Leer el archivo Excel
+        const workbook = XLSX.read(archivoBuffer, { type: 'buffer' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        
+        // Convertir a JSON
+        const datos = XLSX.utils.sheet_to_json(worksheet, { 
+            header: 1,
+            defval: null,
+            raw: false
+        });
+
+        if (datos.length < 2) {
+            throw new Error('El archivo debe contener al menos una fila de datos además del encabezado.');
+        }
+
+        // Obtener el encabezado (primera fila)
+        const encabezados = datos[0].map(h => h ? h.toString().trim().toUpperCase() : '');
+        
+        // Buscar índices de las columnas necesarias
+        const indiceCliente = encabezados.findIndex(h => 
+            h.includes('CLIENTE') || h === 'CLIENTE'
+        );
+        const indiceRuta = encabezados.findIndex(h => 
+            h.includes('RUTA_PRINCIPAL') || h.includes('RUTA PRINCIPAL') || h === 'RUTA_PRINCIPAL'
+        );
+
+        if (indiceCliente === -1) {
+            throw new Error('No se encontró la columna CLIENTE en el archivo.');
+        }
+
+        if (indiceRuta === -1) {
+            throw new Error('No se encontró la columna RUTA_PRINCIPAL en el archivo.');
+        }
+
+        // Procesar cada fila (empezando desde la fila 2, índice 1)
+        for (let i = 1; i < datos.length; i++) {
+            const fila = datos[i];
+            resultados.total++;
+
+            try {
+                const nombreCliente = fila[indiceCliente] ? fila[indiceCliente].toString().trim() : '';
+                const rutaPrincipal = fila[indiceRuta] ? fila[indiceRuta].toString().trim() : '';
+
+                if (!nombreCliente) {
+                    resultados.errores.push({
+                        fila: i + 1,
+                        error: 'El nombre del cliente está vacío',
+                        datos: { nombreCliente, rutaPrincipal }
+                    });
+                    continue;
+                }
+
+                if (!rutaPrincipal) {
+                    resultados.errores.push({
+                        fila: i + 1,
+                        error: 'La ruta principal está vacía',
+                        datos: { nombreCliente, rutaPrincipal }
+                    });
+                    continue;
+                }
+
+                // Obtener el código de la ruta del sistema
+                const codigoRuta = obtenerCodigoRuta(rutaPrincipal);
+                
+                if (!codigoRuta) {
+                    resultados.errores.push({
+                        fila: i + 1,
+                        error: `No se encontró el código de ruta para "${rutaPrincipal}"`,
+                        datos: { nombreCliente, rutaPrincipal }
+                    });
+                    continue;
+                }
+
+                // Buscar la ruta en la base de datos
+                const ruta = await buscarRutaPorCodigo(codigoRuta);
+                
+                if (!ruta) {
+                    resultados.errores.push({
+                        fila: i + 1,
+                        error: `No se encontró la ruta con código "${codigoRuta}" en el sistema`,
+                        datos: { nombreCliente, rutaPrincipal, codigoRuta }
+                    });
+                    continue;
+                }
+
+                // Dividir el nombre completo
+                const { nombre, apellidoPaterno, apellidoMaterno } = dividirNombre(nombreCliente);
+
+                // Crear el cliente con datos mínimos requeridos
+                const clienteData = {
+                    nombre: nombre || 'Sin nombre',
+                    apellidoPaterno: apellidoPaterno || '',
+                    apellidoMaterno: apellidoMaterno || '',
+                    email: null, // No se proporciona en el archivo
+                    telefono: '', // Valor por defecto
+                    calle: 'Por definir', // Valor por defecto
+                    numeroExterior: 'S/N', // Valor por defecto
+                    colonia: 'Por definir',
+                    municipio: 'Por definir',
+                    estado: 'Por definir',
+                    codigoPostal: '00000',
+                    rutaId: ruta.id,
+                    zonaId: ruta.zonaId,
+                    limiteCredito: 0,
+                    saldoActual: 0,
+                    pagosEspecialesAutorizados: false,
+                    estadoCliente: 'activo'
+                };
+
+                // Crear el cliente
+                const nuevoCliente = await this.createCliente(clienteData);
+
+                resultados.exitosos.push({
+                    fila: i + 1,
+                    cliente: {
+                        id: nuevoCliente.id,
+                        nombre: `${nuevoCliente.nombre} ${nuevoCliente.apellidoPaterno} ${nuevoCliente.apellidoMaterno}`.trim(),
+                        ruta: ruta.nombre,
+                        codigoRuta: codigoRuta
+                    }
+                });
+
+            } catch (error) {
+                resultados.errores.push({
+                    fila: i + 1,
+                    error: error.message || 'Error desconocido al procesar la fila',
+                    datos: {
+                        nombreCliente: fila[indiceCliente]?.toString() || '',
+                        rutaPrincipal: fila[indiceRuta]?.toString() || ''
+                    }
+                });
+            }
+        }
+
+        return resultados;
+
+    } catch (error) {
+        throw new Error(`Error al procesar el archivo: ${error.message}`);
+    }
+};
+
 // ========== DOMICILIOS ==========
 exports.createDomicilio = async (clienteId, domicilioData) => {
     // Verificar que el cliente existe
@@ -373,4 +603,3 @@ exports.getDomiciliosByCliente = async (clienteId) => {
         orderBy: { createdAt: 'desc' }
     });
 };
-

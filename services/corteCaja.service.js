@@ -1,32 +1,30 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const { getTodayBoundsMexico } = require('../utils/timezoneMexico');
 
 class CorteCajaService {
   async getTodaySummary(usuarioId) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const { start: todayStart, end: todayEnd } = getTodayBoundsMexico();
 
-    // Obtener pedidos del repartidor hoy
+    // Obtener pedidos del repartidor hoy (día en Ciudad de México)
     const pedidos = await prisma.pedido.findMany({
       where: {
         repartidorId: usuarioId,
         fechaPedido: {
-          gte: today,
-          lt: tomorrow
+          gte: todayStart,
+          lte: todayEnd
         },
         estado: 'entregado'
       }
     });
 
-    // Obtener abonos del repartidor hoy
+    // Obtener abonos del repartidor hoy (día en Ciudad de México)
     const abonos = await prisma.abonoCliente.findMany({
       where: {
         usuarioRegistro: usuarioId,
         fecha: {
-          gte: today,
-          lt: tomorrow
+          gte: todayStart,
+          lte: todayEnd
         }
       },
       include: {
@@ -87,18 +85,15 @@ class CorteCajaService {
   }
 
   async checkExistingCorte(usuarioId, tipo) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const { start: todayStart, end: todayEnd } = getTodayBoundsMexico();
 
     const corte = await prisma.corteCaja.findFirst({
       where: {
         repartidorId: usuarioId,
         tipo: tipo,
         fecha: {
-          gte: today,
-          lt: tomorrow
+          gte: todayStart,
+          lte: todayEnd
         }
       }
     });
