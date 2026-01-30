@@ -100,7 +100,7 @@ app.options('*', (req, res) => {
 
 // Rutas de la API
 app.get('/', (req, res) => {
-    res.json({ message: `Bienvenido a la API 2 de ${config.appName}` });
+    res.json({ message: `Bienvenido a la API 12 de ${config.appName}` });
 });
 
 // Ruta de prueba para verificar que el servidor está funcionando
