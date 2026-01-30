@@ -69,14 +69,13 @@ exports.createCliente = async (clienteData) => {
         }
     });
 
-    // Crear domicilios si se proporcionan
+    // Crear domicilios si se proporcionan (cada uno con QR = su id)
     const domiciliosData = clienteData.domicilios || [];
     if (domiciliosData.length > 0) {
         for (let i = 0; i < domiciliosData.length; i++) {
             const domicilio = domiciliosData[i]
-            const codigoQR = domicilio.codigoQR || generarCodigoQR(nuevoCliente.id, i.toString())
-            
-            await prisma.domicilio.create({
+            const tempCodigoQR = `temp-${nuevoCliente.id}-${i}-${Date.now()}`
+            const creado = await prisma.domicilio.create({
                 data: {
                     clienteId: nuevoCliente.id,
                     tipo: domicilio.tipo,
@@ -91,9 +90,13 @@ exports.createCliente = async (clienteData) => {
                     latitud: domicilio.latitud !== undefined ? domicilio.latitud : null,
                     longitud: domicilio.longitud !== undefined ? domicilio.longitud : null,
                     activo: domicilio.activo !== undefined ? domicilio.activo : true,
-                    codigoQR: codigoQR
+                    codigoQR: tempCodigoQR
                 }
-            })
+            });
+            await prisma.domicilio.update({
+                where: { id: creado.id },
+                data: { codigoQR: creado.id }
+            });
         }
     }
 
@@ -546,6 +549,68 @@ exports.importarClientesMasivo = async (archivoBuffer, nombreArchivo) => {
     }
 };
 
+/**
+ * Buscar por código QR: acepta id de cliente (QR general) o id de domicilio (QR del domicilio).
+ * - Si el código es id de domicilio: devuelve { tipo: 'domicilio', cliente, domicilio }
+ * - Si el código es id de cliente: devuelve { tipo: 'cliente', cliente, domicilios }
+ */
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+exports.buscarPorQR = async (codigo) => {
+    if (!codigo || typeof codigo !== 'string') {
+        const error = new Error('Código QR no válido.');
+        error.status = 400;
+        throw error;
+    }
+    const codigoTrim = codigo.trim();
+    let idBuscar = codigoTrim;
+    try {
+        const parsed = JSON.parse(codigoTrim);
+        if (parsed.domicilioId) idBuscar = parsed.domicilioId;
+        else if (parsed.clienteId) idBuscar = parsed.clienteId;
+        else if (parsed.id) idBuscar = parsed.id;
+    } catch (_) {}
+    if (!UUID_REGEX.test(idBuscar)) {
+        const error = new Error('Código QR no reconocido.');
+        error.status = 404;
+        throw error;
+    }
+    const domicilio = await prisma.domicilio.findUnique({
+        where: { id: idBuscar },
+        include: {
+            cliente: {
+                include: {
+                    ruta: true,
+                    zona: true,
+                    domicilios: { where: { activo: true } }
+                }
+            }
+        }
+    });
+    if (domicilio) {
+        const cliente = { ...domicilio.cliente, email: domicilio.cliente.email ?? '' };
+        return { tipo: 'domicilio', cliente, domicilio };
+    }
+    const cliente = await prisma.cliente.findUnique({
+        where: { id: idBuscar },
+        include: {
+            ruta: true,
+            zona: true,
+            domicilios: { where: { activo: true } }
+        }
+    });
+    if (cliente) {
+        return {
+            tipo: 'cliente',
+            cliente: { ...cliente, email: cliente.email ?? '' },
+            domicilios: cliente.domicilios || []
+        };
+    }
+    const error = new Error('No se encontró cliente ni domicilio con este código QR.');
+    error.status = 404;
+    throw error;
+};
+
 // ========== DOMICILIOS ==========
 exports.createDomicilio = async (clienteId, domicilioData) => {
     // Verificar que el cliente existe
@@ -559,9 +624,7 @@ exports.createDomicilio = async (clienteId, domicilioData) => {
         throw error;
     }
 
-    // Generar código QR si no se proporciona
-    const codigoQR = domicilioData.codigoQR || generarCodigoQR(clienteId, Date.now().toString());
-
+    const tempCodigoQR = domicilioData.codigoQR || `temp-${clienteId}-${Date.now()}`;
     const nuevoDomicilio = await prisma.domicilio.create({
         data: {
             clienteId: clienteId,
@@ -577,11 +640,19 @@ exports.createDomicilio = async (clienteId, domicilioData) => {
             latitud: domicilioData.latitud !== undefined ? domicilioData.latitud : null,
             longitud: domicilioData.longitud !== undefined ? domicilioData.longitud : null,
             activo: domicilioData.activo !== undefined ? domicilioData.activo : true,
-            codigoQR: codigoQR
+            codigoQR: tempCodigoQR
         }
     });
 
-    return nuevoDomicilio;
+    // QR del domicilio = id del domicilio (único por domicilio)
+    await prisma.domicilio.update({
+        where: { id: nuevoDomicilio.id },
+        data: { codigoQR: nuevoDomicilio.id }
+    });
+
+    return prisma.domicilio.findUnique({
+        where: { id: nuevoDomicilio.id }
+    });
 };
 
 exports.updateDomicilio = async (id, updateData) => {
@@ -602,4 +673,62 @@ exports.getDomiciliosByCliente = async (clienteId) => {
         where: { clienteId },
         orderBy: { createdAt: 'desc' }
     });
+};
+
+/**
+ * Obtener clientes por rutas con paginación y búsqueda en BD.
+ * @param {string[]} rutaIds - IDs de rutas del repartidor
+ * @param {Object} opts - { limit, offset, q }
+ * @returns {Promise<{ total: number, clientes: Object[] }>}
+ */
+exports.getClientesByRutasPaginated = async (rutaIds, opts = {}) => {
+    const limit = Math.min(Math.max(parseInt(opts.limit, 10) || 10, 1), 100);
+    const offset = Math.max(parseInt(opts.offset, 10) || 0, 0);
+    const q = (opts.q && typeof opts.q === 'string') ? opts.q.trim() : '';
+
+    if (!rutaIds || !Array.isArray(rutaIds) || rutaIds.length === 0) {
+        return { total: 0, clientes: [] };
+    }
+
+    const where = {
+        rutaId: { in: rutaIds },
+    };
+
+    if (q.length > 0) {
+        where.OR = [
+            { nombre: { contains: q } },
+            { apellidoPaterno: { contains: q } },
+            { apellidoMaterno: { contains: q } },
+            { telefono: { contains: q } },
+            { calle: { contains: q } },
+            { colonia: { contains: q } },
+            { municipio: { contains: q } },
+            { domicilios: { some: { calle: { contains: q } } } },
+            { domicilios: { some: { colonia: { contains: q } } } },
+        ];
+    }
+
+    const include = {
+        ruta: { include: { sede: true } },
+        zona: true,
+        domicilios: { where: { activo: true } },
+    };
+
+    const [total, clientes] = await Promise.all([
+        prisma.cliente.count({ where }),
+        prisma.cliente.findMany({
+            where,
+            include,
+            orderBy: { fechaRegistro: 'desc' },
+            take: limit,
+            skip: offset,
+        }),
+    ]);
+
+    const clientesNormalizados = clientes.map(cliente => ({
+        ...cliente,
+        email: cliente.email ?? '',
+    }));
+
+    return { total, clientes: clientesNormalizados };
 };

@@ -45,9 +45,21 @@ function getTodayBoundsMexico() {
   return { start, end, dateStr };
 }
 
+/**
+ * Obtiene fecha y hora actual en Ciudad de México para pedidos.
+ * @returns {{ dateStr: string, timeStr: string, date: Date }} dateStr YYYY-MM-DD, timeStr HH:MM, date = instante actual
+ */
+function getNowMexico() {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-CA', { timeZone: TIMEZONE_MEXICO });
+  const timeStr = now.toLocaleTimeString('en-GB', { timeZone: TIMEZONE_MEXICO, hour: '2-digit', minute: '2-digit', hour12: false });
+  return { dateStr, timeStr, date: now };
+}
+
 module.exports = {
   TIMEZONE_MEXICO,
   getTodayDateMexico,
   getMexicoCityDayBounds,
   getTodayBoundsMexico,
+  getNowMexico,
 };

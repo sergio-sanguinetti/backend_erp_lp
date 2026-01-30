@@ -54,6 +54,13 @@ exports.findUsuarioById = async (id) => {
     });
 };
 
+exports.updatePushToken = async (userId, pushToken) => {
+    return await prisma.usuario.update({
+        where: { id: userId },
+        data: { pushToken: pushToken || null }
+    });
+};
+
 exports.updateUsuario = async (id, updateData) => {
     // Si se actualiza la contraseña, hashearla
     if (updateData.password) {

@@ -41,6 +41,7 @@ exports.getAllConfiguracionesTicket = async (req, res, next) => {
         colorPrincipal: configuracion.colorPrincipal,
         alineacion: configuracion.alineacion
       },
+      urlQR: configuracion.urlQR,
       activo: configuracion.activo,
       fechaCreacion: configuracion.fechaCreacion,
       fechaModificacion: configuracion.fechaModificacion
@@ -96,6 +97,7 @@ exports.getConfiguracionTicket = async (req, res, next) => {
         colorPrincipal: configuracion.colorPrincipal,
         alineacion: configuracion.alineacion
       },
+      urlQR: configuracion.urlQR,
       activo: configuracion.activo,
       fechaCreacion: configuracion.fechaCreacion,
       fechaModificacion: configuracion.fechaModificacion
@@ -163,6 +165,7 @@ exports.updateConfiguracionTicket = async (req, res, next) => {
         colorPrincipal: configuracion.colorPrincipal,
         alineacion: configuracion.alineacion
       },
+      urlQR: configuracion.urlQR,
       activo: configuracion.activo,
       fechaCreacion: configuracion.fechaCreacion,
       fechaModificacion: configuracion.fechaModificacion

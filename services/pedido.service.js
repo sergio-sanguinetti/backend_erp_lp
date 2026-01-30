@@ -1,37 +1,33 @@
 const { prisma } = require('../config/database');
-const { getMexicoCityDayBounds } = require('../utils/timezoneMexico');
+const { getMexicoCityDayBounds, getNowMexico, getTodayDateMexico } = require('../utils/timezoneMexico');
 
-// Generar número de pedido único
+// Generar número de pedido único (usa el máximo del día + 1 para evitar colisiones por concurrencia)
 const generarNumeroPedido = async () => {
-  const fecha = new Date();
-  const año = fecha.getFullYear();
-  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
-  const dia = String(fecha.getDate()).padStart(2, '0');
-  
-  // Contar pedidos del día
-  const inicioDia = new Date(fecha.setHours(0, 0, 0, 0));
-  const finDia = new Date(fecha.setHours(23, 59, 59, 999));
-  
-  const pedidosDelDia = await prisma.pedido.count({
-    where: {
-      fechaCreacion: {
-        gte: inicioDia,
-        lte: finDia
-      }
-    }
+  const dateStr = getTodayDateMexico();
+  const prefix = `PED-${dateStr.replace(/-/g, '')}-`;
+
+  const ultimo = await prisma.pedido.findFirst({
+    where: { numeroPedido: { startsWith: prefix } },
+    orderBy: { numeroPedido: 'desc' },
+    select: { numeroPedido: true }
   });
-  
-  const numero = String(pedidosDelDia + 1).padStart(4, '0');
-  return `PED-${año}${mes}${dia}-${numero}`;
+
+  const siguiente = ultimo
+    ? parseInt(ultimo.numeroPedido.slice(prefix.length), 10) + 1
+    : 1;
+  return prefix + String(siguiente).padStart(4, '0');
 };
 
 // Obtener todos los pedidos con filtros
 exports.getAllPedidos = async (filtros = {}) => {
   const where = {};
   
-  // Fechas interpretadas en zona horaria Ciudad de México para el "día" correcto
+  // Fechas: día en Ciudad de México. Incluir también medianoche UTC del mismo día por si la BD guardó "YYYY-MM-DD 00:00:00" en UTC.
   if (filtros.fechaDesde) {
-    const { start } = getMexicoCityDayBounds(filtros.fechaDesde);
+    const trimmed = String(filtros.fechaDesde).trim().slice(0, 10);
+    const { start: startMexico } = getMexicoCityDayBounds(trimmed);
+    const startUTC = new Date(`${trimmed}T00:00:00.000Z`);
+    const start = startUTC < startMexico ? startUTC : startMexico;
     where.fechaPedido = {
       ...where.fechaPedido,
       gte: start
@@ -63,6 +59,10 @@ exports.getAllPedidos = async (filtros = {}) => {
   
   if (filtros.sedeId) {
     where.sedeId = filtros.sedeId;
+  }
+
+  if (filtros.rutaId) {
+    where.rutaId = filtros.rutaId;
   }
   
   console.log('Query where clause:', JSON.stringify(where, null, 2));
@@ -266,14 +266,18 @@ exports.createPedido = async (pedidoData) => {
     }
   }
   
-  // Generar número de pedido
-  const numeroPedido = await generarNumeroPedido();
-  
-  // Convertir fechaPedido a DateTime si viene como string
-  const fechaPedido = pedidoData.fechaPedido 
-    ? new Date(pedidoData.fechaPedido)
-    : new Date();
-  
+  // Fecha y hora en Ciudad de México (America/Mexico_City, UTC-6)
+  const nowMexico = getNowMexico();
+  let fechaPedido;
+  let horaPedido = pedidoData.horaPedido || nowMexico.timeStr;
+  if (pedidoData.fechaPedido) {
+    const dateStr = String(pedidoData.fechaPedido).trim().slice(0, 10);
+    fechaPedido = new Date(`${dateStr}T${horaPedido}:00-06:00`);
+  } else {
+    fechaPedido = nowMexico.date;
+    horaPedido = nowMexico.timeStr;
+  }
+
   // Calcular totales
   const cantidadProductos = pedidoData.productos?.length || 0;
   // Usar subtotal si está disponible, sino calcular desde precio * cantidad
@@ -291,13 +295,18 @@ exports.createPedido = async (pedidoData) => {
     ? parseFloat(pedidoData.totalMonto) 
     : ventaTotal;
 
-  const nuevoPedido = await prisma.pedido.create({
-    data: {
-      numeroPedido,
+  const maxIntentos = 3;
+  let ultimoError;
+  for (let intento = 0; intento < maxIntentos; intento++) {
+    const numeroPedido = await generarNumeroPedido();
+    try {
+      const nuevoPedido = await prisma.pedido.create({
+        data: {
+          numeroPedido,
       clienteId: pedidoData.clienteId,
       rutaId: rutaId || null,
       fechaPedido,
-      horaPedido: pedidoData.horaPedido || new Date().toTimeString().slice(0, 5),
+      horaPedido,
       estado: 'pendiente',
       cantidadProductos,
       ventaTotal: ventaTotalFinal,
@@ -371,8 +380,17 @@ exports.createPedido = async (pedidoData) => {
       }
     }
   });
-  
-  return nuevoPedido;
+      return nuevoPedido;
+    } catch (err) {
+      // P2002 = unique constraint (numeroPedido duplicado por concurrencia)
+      if (err.code === 'P2002' && intento < maxIntentos - 1) {
+        ultimoError = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw ultimoError || new Error('No se pudo crear el pedido (número duplicado)');
 };
 
 // Actualizar pedido

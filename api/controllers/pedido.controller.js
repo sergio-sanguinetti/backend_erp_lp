@@ -1,4 +1,6 @@
 const pedidoService = require('../../services/pedido.service');
+const usuarioService = require('../../services/usuario.service');
+const notificationService = require('../../services/notification.service');
 
 // Obtener todos los pedidos
 exports.getAllPedidos = async (req, res, next) => {
@@ -12,6 +14,12 @@ exports.getAllPedidos = async (req, res, next) => {
     if (req.query.tipoServicio) filtros.tipoServicio = req.query.tipoServicio;
     if (req.query.repartidorId) filtros.repartidorId = req.query.repartidorId;
     if (req.query.sedeId) filtros.sedeId = req.query.sedeId;
+    if (req.query.rutaId) filtros.rutaId = req.query.rutaId;
+
+    // Repartidores solo ven sus propios pedidos: forzar repartidorId con el usuario autenticado
+    if (req.user && req.user.rol === 'repartidor' && req.user.id) {
+      filtros.repartidorId = req.user.id;
+    }
 
     // Si el usuario no es superAdministrador, filtrar por su sede automáticamente
     if (req.user && req.user.rol === 'administrador' && req.user.sede && !filtros.sedeId) {
@@ -107,6 +115,26 @@ exports.createPedido = async (req, res, next) => {
     console.log('Creando pedido con sedeId:', sedeId, 'Usuario sede:', req.user?.sede);
 
     const pedido = await pedidoService.createPedido(pedidoData);
+
+    // Notificación push al repartidor cuando se le asigna un pedido
+    if (pedido.repartidorId) {
+      try {
+        const repartidor = await usuarioService.findUsuarioById(pedido.repartidorId);
+        if (repartidor && repartidor.pushToken) {
+          const clienteNombre = pedido.cliente
+            ? [pedido.cliente.nombre, pedido.cliente.apellidoPaterno, pedido.cliente.apellidoMaterno].filter(Boolean).join(' ')
+            : 'Cliente';
+          await notificationService.sendPedidoAsignadoToRepartidor(repartidor.pushToken, {
+            titulo: 'Nuevo pedido asignado',
+            cuerpo: `Pedido ${pedido.numeroPedido} - ${clienteNombre}. Revisa la app para más detalles.`,
+            pedidoId: pedido.id,
+            numeroPedido: pedido.numeroPedido,
+          });
+        }
+      } catch (notifError) {
+        console.error('[Pedido] Error al enviar notificación push al repartidor:', notifError.message);
+      }
+    }
 
     res.status(201).json({
       message: 'Pedido creado exitosamente.',

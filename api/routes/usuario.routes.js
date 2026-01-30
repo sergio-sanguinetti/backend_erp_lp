@@ -13,6 +13,9 @@ router.post('/repartidor/login', usuarioController.loginRepartidor);
 // Se protege para asegurar que se use un token temporal válido
 router.post('/login/verify-2fa', protect, usuarioController.verifyLogin2FA);
 
+// Registrar token de notificaciones push (repartidores)
+router.put('/me/push-token', protect, usuarioController.updatePushToken);
+
 // Rutas protegidas (requieren token de sesión válido)
 router.get('/profile', protect, usuarioController.getProfile);
 router.put('/profile', protect, usuarioController.updateProfile);

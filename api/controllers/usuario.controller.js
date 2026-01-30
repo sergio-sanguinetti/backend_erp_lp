@@ -228,6 +228,18 @@ exports.disable2FA = async (req, res, next) => {
     }
 };
 
+// Registrar o actualizar token de notificaciones push (para app repartidor)
+exports.updatePushToken = async (req, res, next) => {
+    try {
+        const { pushToken } = req.body;
+        const userId = req.user.id;
+        await usuarioService.updatePushToken(userId, pushToken || null);
+        res.status(200).json({ message: 'Token de notificaciones actualizado.' });
+    } catch (error) {
+        next(error);
+    }
+};
+
 // Obtener perfil del usuario autenticado
 exports.getProfile = async (req, res, next) => {
     try {

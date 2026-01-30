@@ -1,5 +1,29 @@
 const clienteService = require('../../services/cliente.service');
 
+// Obtener clientes por rutas con paginación y búsqueda (para app repartidores)
+exports.getClientesByRutasPaginated = async (req, res, next) => {
+    try {
+        const rutaIdsParam = req.query.rutaIds;
+        const limit = req.query.limit;
+        const offset = req.query.offset;
+        const q = req.query.q;
+
+        const rutaIds = rutaIdsParam
+            ? rutaIdsParam.split(',').map(id => id.trim()).filter(Boolean)
+            : [];
+
+        const result = await clienteService.getClientesByRutasPaginated(rutaIds, {
+            limit,
+            offset,
+            q,
+        });
+
+        res.status(200).json(result);
+    } catch (error) {
+        next(error);
+    }
+};
+
 // Obtener todos los clientes
 exports.getAllClientes = async (req, res, next) => {
     try {
@@ -66,6 +90,22 @@ exports.updateCliente = async (req, res, next) => {
             cliente: clienteData
         });
     } catch (error) {
+        next(error);
+    }
+};
+
+// Buscar por código QR (id de cliente = QR general; id de domicilio = QR del domicilio)
+exports.buscarPorQR = async (req, res, next) => {
+    try {
+        const codigo = req.query.codigo;
+        if (!codigo) {
+            return res.status(400).json({ message: 'Se requiere el parámetro codigo.' });
+        }
+        const result = await clienteService.buscarPorQR(codigo);
+        res.status(200).json(result);
+    } catch (error) {
+        if (error.status === 404) return res.status(404).json({ message: error.message });
+        if (error.status === 400) return res.status(400).json({ message: error.message });
         next(error);
     }
 };
@@ -155,9 +195,7 @@ exports.importarClientesMasivo = async (req, res, next) => {
             return res.status(400).json({ 
                 message: 'No se proporcionó ningún archivo.' 
             });
-        }
-
-        const resultados = await clienteService.importarClientesMasivo(
+        }        const resultados = await clienteService.importarClientesMasivo(
             req.file.buffer,
             req.file.originalname
         );
@@ -178,4 +216,3 @@ exports.importarClientesMasivo = async (req, res, next) => {
         next(error);
     }
 };
-

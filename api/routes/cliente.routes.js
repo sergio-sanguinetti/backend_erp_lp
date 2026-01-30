@@ -30,7 +30,9 @@ const upload = multer({
     }
 });
 
-// Rutas de clientes
+// Rutas de clientes (by-rutas y buscar-por-qr antes de :id para que no se interpreten como id)
+router.get('/by-rutas', clienteController.getClientesByRutasPaginated);
+router.get('/buscar-por-qr', clienteController.buscarPorQR);
 router.get('/', clienteController.getAllClientes);
 router.get('/:id', clienteController.getClienteById);
 router.post('/', protect, clienteController.createCliente);

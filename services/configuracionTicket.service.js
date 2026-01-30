@@ -61,6 +61,7 @@ exports.getConfiguracionTicket = async (tipoTicket = 'venta') => {
       mostrarCliente: true,
       colorPrincipal: '#1976d2',
       alineacion: 'centro',
+      urlQR: null,
       activo: true,
       fechaCreacion: new Date(),
       fechaModificacion: new Date()
@@ -133,11 +134,12 @@ exports.getConfiguracionTicket = async (tipoTicket = 'venta') => {
         mostrarHora: true,
         mostrarCajero: true,
         mostrarCliente: true,
-        colorPrincipal: '#1976d2',
-        alineacion: 'centro',
-        activo: true,
-        fechaCreacion: new Date(),
-        fechaModificacion: new Date()
+          colorPrincipal: '#1976d2',
+          alineacion: 'centro',
+          urlQR: null,
+          activo: true,
+          fechaCreacion: new Date(),
+          fechaModificacion: new Date()
       };
     }
     throw error;
@@ -189,6 +191,7 @@ exports.updateConfiguracionTicket = async (updateData) => {
     if (updateData.diseño?.colorPrincipal !== undefined) dataToUpdate.colorPrincipal = updateData.diseño.colorPrincipal;
     if (updateData.diseño?.alineacion !== undefined) dataToUpdate.alineacion = updateData.diseño.alineacion;
     if (updateData.activo !== undefined) dataToUpdate.activo = updateData.activo;
+    if (updateData.urlQR !== undefined) dataToUpdate.urlQR = updateData.urlQR && String(updateData.urlQR).trim() ? updateData.urlQR.trim() : null;
 
     // Si no existe, crearla
     if (!configuracion) {
@@ -221,6 +224,7 @@ exports.updateConfiguracionTicket = async (updateData) => {
           mostrarCliente: updateData.diseño?.mostrarCliente !== undefined ? updateData.diseño.mostrarCliente : true,
           colorPrincipal: updateData.diseño?.colorPrincipal || '#1976d2',
           alineacion: updateData.diseño?.alineacion || 'centro',
+          urlQR: updateData.urlQR && String(updateData.urlQR).trim() ? updateData.urlQR.trim() : null,
           activo: updateData.activo !== undefined ? updateData.activo : true
         }
       });
