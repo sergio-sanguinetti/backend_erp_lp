@@ -39,7 +39,7 @@ const server = http.createServer(app);
 // Conexión a la base de datos
 connectDB();
 
-// Configuración de CORS
+// Configuración de CORS: permitir tanto orígenes HTTP (localhost, IPs) como HTTPS (Vercel, producción)
 const corsOptions = {
   origin: [
     'http://localhost:3000',
@@ -50,13 +50,17 @@ const corsOptions = {
     // Permitir conexiones desde la red local (para Expo Go en dispositivos físicos)
     /^http:\/\/192\.168\.\d+\.\d+:\d+$/, // Permite cualquier IP local (192.168.x.x)
     /^http:\/\/10\.0\.2\.2:\d+$/, // Para emulador Android
+    // Orígenes HTTP por IP (para que el backend acepte peticiones desde front en HTTP)
+    /^http:\/\/\d+\.\d+\.\d+\.\d+(:\d+)?$/, // ej. http://76.13.113.159:3000
+    // Vercel / producción (HTTPS)
+    'https://erp-gaslp-front.vercel.app',
     'https://konfio-front.vercel.app',
     'https://konfio-front-git-main-sergio-sanguinetti.vercel.app',
     'https://konfio-front-sergio-sanguinetti.vercel.app',
     'https://konfio-front-git-main-sergio-sanguinettis-projects.vercel.app',
     'https://konfio-front-sergio-sanguinettis-projects.vercel.app',
-    /^https:\/\/konfio-front.*\.vercel\.app$/, // Permite cualquier subdominio de vercel.app
-    /^https:\/\/.*\.vercel\.app$/ // Permite cualquier dominio de Vercel
+    /^https:\/\/konfio-front.*\.vercel\.app$/,
+    /^https:\/\/.*\.vercel\.app$/ // Cualquier subdominio de Vercel
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
@@ -96,7 +100,7 @@ app.options('*', (req, res) => {
 
 // Rutas de la API
 app.get('/', (req, res) => {
-    res.json({ message: `Bienvenido a la API de ${config.appName}` });
+    res.json({ message: `Bienvenido a la API 2 de ${config.appName}` });
 });
 
 // Ruta de prueba para verificar que el servidor está funcionando
