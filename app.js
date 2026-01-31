@@ -56,9 +56,6 @@ const corsOptions = {
     'https://erp-gaslp-front.vercel.app',
     'https://app.prometeogp.com',
     'https://konfio-front.vercel.app',
-    'https://konfio-front-git-main-sergio-sanguinetti.vercel.app',
-    'https://konfio-front-sergio-sanguinetti.vercel.app',
-    'https://konfio-front-git-main-sergio-sanguinettis-projects.vercel.app',
     'https://konfio-front-sergio-sanguinettis-projects.vercel.app',
     /^https:\/\/konfio-front.*\.vercel\.app$/,
     /^https:\/\/.*\.vercel\.app$/ // Cualquier subdominio de Vercel
