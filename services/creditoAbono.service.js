@@ -1,6 +1,5 @@
 // services/creditoAbono.service.js
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { prisma } = require('../config/database');
 
 // ========== NOTAS DE CRÉDITO ==========
 
@@ -89,6 +88,10 @@ exports.getAllNotasCredito = async (filtros = {}) => {
       ...where.fechaVenta,
       lte: new Date(filtros.fechaHasta)
     };
+  }
+
+  if (filtros.rutaId) {
+    where.cliente = { rutaId: filtros.rutaId };
   }
 
   const notas = await prisma.notaCredito.findMany({
@@ -481,6 +484,10 @@ exports.getAllPagos = async (filtros = {}) => {
     };
   }
 
+  if (filtros.rutaId) {
+    where.cliente = { rutaId: filtros.rutaId };
+  }
+
   return await prisma.pago.findMany({
     where,
     include: {
@@ -624,19 +631,20 @@ exports.updatePagoEstado = async (id, estado, usuarioAutorizacion) => {
 // ========== RESUMEN DE CARTERA ==========
 
 exports.getResumenCartera = async (filtros = {}) => {
-  const where = {};
+  const where = {
+    estado: { not: 'pagada' }
+  };
 
   if (filtros.clienteId) {
     where.clienteId = filtros.clienteId;
   }
 
+  if (filtros.rutaId) {
+    where.cliente = { rutaId: filtros.rutaId };
+  }
+
   const notas = await prisma.notaCredito.findMany({
-    where: {
-      ...where,
-      estado: {
-        not: 'pagada'
-      }
-    }
+    where
   });
 
   const carteraTotal = notas.reduce((sum, nota) => sum + nota.saldoPendiente, 0);
@@ -691,20 +699,35 @@ exports.getHistorialLimites = async (filtros = {}) => {
     where.clienteId = filtros.clienteId;
   }
 
-  return await prisma.historialLimiteCredito.findMany({
-    where,
-    include: {
-      cliente: {
-        include: {
-          ruta: true
-        }
+  if (filtros.rutaId) {
+    where.cliente = { rutaId: filtros.rutaId };
+  }
+
+  const page = Math.max(1, parseInt(filtros.page, 10) || 1);
+  const pageSize = Math.min(100, Math.max(1, parseInt(filtros.pageSize, 10) || 10));
+  const skip = (page - 1) * pageSize;
+
+  const [total, data] = await Promise.all([
+    prisma.historialLimiteCredito.count({ where }),
+    prisma.historialLimiteCredito.findMany({
+      where,
+      skip,
+      take: pageSize,
+      include: {
+        cliente: {
+          include: {
+            ruta: true
+          }
+        },
+        usuario: true
       },
-      usuario: true
-    },
-    orderBy: {
-      fechaCreacion: 'desc'
-    }
-  });
+      orderBy: {
+        fechaCreacion: 'desc'
+      }
+    })
+  ]);
+
+  return { data, total };
 };
 
 // ========== FUNCIONES AUXILIARES ==========

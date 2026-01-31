@@ -105,7 +105,8 @@ exports.getAllPagos = async (req, res, next) => {
       clienteId: req.query.clienteId,
       estado: req.query.estado,
       fechaDesde: req.query.fechaDesde,
-      fechaHasta: req.query.fechaHasta
+      fechaHasta: req.query.fechaHasta,
+      rutaId: req.query.rutaId
     };
 
     const pagos = await creditoAbonoService.getAllPagos(filtros);
@@ -188,7 +189,8 @@ exports.updatePagoEstado = async (req, res, next) => {
 exports.getResumenCartera = async (req, res, next) => {
   try {
     const filtros = {
-      clienteId: req.query.clienteId
+      clienteId: req.query.clienteId,
+      rutaId: req.query.rutaId
     };
 
     const resumen = await creditoAbonoService.getResumenCartera(filtros);
@@ -209,19 +211,18 @@ exports.getClientesCredito = async (req, res, next) => {
       sedeId: req.query.sedeId
     };
 
-    const clientes = await clienteService.getAllClientes(filtros);
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 10));
 
-    // Obtener notas de crédito para cada cliente
+    const { data: clientes, total } = await clienteService.getClientesPaginados(filtros, page, pageSize);
+
     const clientesConCredito = await Promise.all(
       clientes.map(async (cliente) => {
         const notas = await creditoAbonoService.getAllNotasCredito({
           clienteId: cliente.id
         });
 
-        // Calcular días promedio de pago (simplificado)
         const diasPromedioPago = calcularDiasPromedioPago(cliente.id);
-
-        // Determinar estado del cliente
         const estado = determinarEstadoCliente(cliente, notas);
 
         return {
@@ -240,7 +241,7 @@ exports.getClientesCredito = async (req, res, next) => {
       })
     );
 
-    res.status(200).json(clientesConCredito);
+    res.status(200).json({ clientes: clientesConCredito, total });
   } catch (error) {
     next(error);
   }
@@ -251,11 +252,14 @@ exports.getClientesCredito = async (req, res, next) => {
 exports.getHistorialLimites = async (req, res, next) => {
   try {
     const filtros = {
-      clienteId: req.query.clienteId
+      clienteId: req.query.clienteId,
+      rutaId: req.query.rutaId,
+      page: req.query.page,
+      pageSize: req.query.pageSize
     };
 
-    const historial = await creditoAbonoService.getHistorialLimites(filtros);
-    res.status(200).json(historial);
+    const { data: historial, total } = await creditoAbonoService.getHistorialLimites(filtros);
+    res.status(200).json({ historial, total });
   } catch (error) {
     next(error);
   }

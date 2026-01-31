@@ -43,6 +43,28 @@ exports.getAllCortes = async (req, res) => {
   }
 };
 
+exports.getMisCortes = async (req, res) => {
+  try {
+    const cortes = await corteCajaService.getCortesByRepartidor(req.user.id);
+    res.json(cortes);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.getCorteById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const corte = await corteCajaService.getCorteById(id, req.user.id);
+    if (!corte) {
+      return res.status(404).json({ message: 'Corte no encontrado' });
+    }
+    res.json(corte);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 exports.getCortePipas = async (req, res) => {
   try {
     const { sedeId } = req.query;

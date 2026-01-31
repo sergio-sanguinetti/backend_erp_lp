@@ -6,7 +6,9 @@ const { protect } = require('../middlewares/auth.middleware');
 router.get('/summary', protect, corteCajaController.getTodaySummary);
 router.get('/check', protect, corteCajaController.checkCorte);
 router.post('/', protect, corteCajaController.createCorte);
+router.get('/mios', protect, corteCajaController.getMisCortes);
 router.get('/', protect, corteCajaController.getAllCortes);
+router.get('/:id', protect, corteCajaController.getCorteById);
 router.put('/:id/validate', protect, corteCajaController.validateCorte);
 
 // Rutas para el sistema web (frontend)

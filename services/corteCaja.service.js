@@ -167,6 +167,33 @@ class CorteCajaService {
     });
   }
 
+  async getCortesByRepartidor(usuarioId) {
+    return await prisma.corteCaja.findMany({
+      where: { repartidorId: usuarioId },
+      include: {
+        repartidor: true,
+        depositos: true,
+        detalles: true
+      },
+      orderBy: { fecha: 'desc' }
+    });
+  }
+
+  async getCorteById(id, usuarioId = null) {
+    const where = { id };
+    if (usuarioId) {
+      where.repartidorId = usuarioId;
+    }
+    return await prisma.corteCaja.findFirst({
+      where,
+      include: {
+        repartidor: true,
+        depositos: true,
+        detalles: true
+      }
+    });
+  }
+
   async getCorteResumenPorTipoServicio(tipoServicio, sedeId) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);

@@ -232,6 +232,88 @@ exports.getAllClientes = async (filtros = {}) => {
     }
 };
 
+/**
+ * Obtiene clientes con paginación (mismo filtrado que getAllClientes).
+ * @param {object} filtros - nombre, email, estadoCliente, rutaId, sedeId
+ * @param {number} page - página (1-based)
+ * @param {number} pageSize - tamaño de página
+ * @returns {{ data: object[], total: number }}
+ */
+exports.getClientesPaginados = async (filtros = {}, page = 1, pageSize = 10) => {
+    const where = {};
+    const andConditions = [];
+
+    if (filtros.nombre) {
+        andConditions.push({
+            OR: [
+                { nombre: { contains: filtros.nombre } },
+                { apellidoPaterno: { contains: filtros.nombre } },
+                { apellidoMaterno: { contains: filtros.nombre } }
+            ]
+        });
+    }
+
+    if (filtros.email) {
+        where.email = { contains: filtros.email };
+    }
+
+    if (filtros.estadoCliente) {
+        where.estadoCliente = filtros.estadoCliente;
+    }
+
+    if (filtros.rutaId) {
+        where.rutaId = filtros.rutaId;
+    }
+
+    if (filtros.sedeId) {
+        const rutasDeSede = await prisma.ruta.findMany({
+            where: { sedeId: filtros.sedeId },
+            select: { id: true }
+        });
+        const rutasIds = rutasDeSede.map(r => r.id);
+        if (rutasIds.length > 0) {
+            andConditions.push({
+                OR: [
+                    { rutaId: { in: rutasIds } },
+                    { rutaId: null }
+                ]
+            });
+        } else {
+            andConditions.push({ rutaId: null });
+        }
+    }
+
+    if (andConditions.length > 0) {
+        where.AND = andConditions;
+    }
+
+    const skip = Math.max(0, (Number(page) || 1) - 1) * Math.max(1, Number(pageSize) || 10);
+    const take = Math.max(1, Math.min(100, Number(pageSize) || 10));
+
+    const [total, clientes] = await Promise.all([
+        prisma.cliente.count({ where }),
+        prisma.cliente.findMany({
+            where,
+            skip,
+            take,
+            include: {
+                ruta: { include: { sede: true } },
+                zona: true,
+                domicilios: { where: { activo: true } }
+            },
+            orderBy: { fechaRegistro: 'desc' }
+        })
+    ]);
+
+    return {
+        data: clientes.map(cliente => ({
+            ...cliente,
+            email: cliente.email ?? ''
+        })),
+        total
+    };
+};
+
 exports.updateCliente = async (id, updateData) => {
     // Normalizar email: convertir strings vacíos, undefined, o null a null
     if (updateData.email !== undefined) {
