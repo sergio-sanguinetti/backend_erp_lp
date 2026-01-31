@@ -54,7 +54,7 @@ const corsOptions = {
     /^http:\/\/\d+\.\d+\.\d+\.\d+(:\d+)?$/, // ej. http://76.13.113.159:3000
     // Vercel / producción (HTTPS)
     'https://erp-gaslp-front.vercel.app',
-    'app.prometeogp.com',
+    'https://app.prometeogp.com',
     'https://konfio-front.vercel.app',
     'https://konfio-front-git-main-sergio-sanguinetti.vercel.app',
     'https://konfio-front-sergio-sanguinetti.vercel.app',
