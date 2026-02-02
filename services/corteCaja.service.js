@@ -6,7 +6,7 @@ class CorteCajaService {
   async getTodaySummary(usuarioId) {
     const { start: todayStart, end: todayEnd } = getTodayBoundsMexico();
 
-    // Obtener pedidos del repartidor hoy (día en Ciudad de México)
+    // Obtener pedidos del repartidor hoy (día en Ciudad de México) con cliente para mostrar nombre en corte
     const pedidos = await prisma.pedido.findMany({
       where: {
         repartidorId: usuarioId,
@@ -15,10 +15,19 @@ class CorteCajaService {
           lte: todayEnd
         },
         estado: 'entregado'
+      },
+      include: {
+        cliente: {
+          select: {
+            nombre: true,
+            apellidoPaterno: true,
+            apellidoMaterno: true
+          }
+        }
       }
     });
 
-    // Obtener abonos del repartidor hoy (día en Ciudad de México)
+    // Obtener abonos del repartidor hoy (día en Ciudad de México) con cliente para mostrar nombre en corte
     const abonos = await prisma.abonoCliente.findMany({
       where: {
         usuarioRegistro: usuarioId,
@@ -28,6 +37,13 @@ class CorteCajaService {
         }
       },
       include: {
+        cliente: {
+          select: {
+            nombre: true,
+            apellidoPaterno: true,
+            apellidoMaterno: true
+          }
+        },
         formaPago: true
       }
     });
@@ -50,8 +66,9 @@ class CorteCajaService {
       stats.totalSales += p.ventaTotal;
       if (p.formasPago) {
         try {
-          const fp = JSON.parse(p.formasPago);
-          fp.forEach(f => {
+          const fp = typeof p.formasPago === 'string' ? JSON.parse(p.formasPago) : p.formasPago;
+          const items = Array.isArray(fp) ? fp : (fp?.items || []);
+          items.forEach(f => {
             const monto = parseFloat(f.monto || 0);
             const tipo = (f.tipo || '').toLowerCase();
             if (tipo.includes('efectivo')) stats.efectivo += monto;

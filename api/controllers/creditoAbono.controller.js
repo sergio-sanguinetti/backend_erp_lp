@@ -142,11 +142,16 @@ exports.createPago = async (req, res, next) => {
       fechaPago: req.body.fechaPago || new Date(),
       horaPago: req.body.horaPago || new Date().toTimeString().slice(0, 5),
       observaciones: req.body.observaciones,
-      usuarioRegistro: req.user.id,
+      usuarioRegistro: req.body.usuarioRegistro || req.user.id,
       usuarioAutorizacion: req.body.usuarioAutorizacion,
       estado: req.body.estado || 'pendiente',
       formasPago: req.body.formasPago,
-      firmaCliente: req.body.firmaCliente || null // Agregar firma del cliente si existe
+      firmaCliente: req.body.firmaCliente || null,
+      // Descuento: pasar al servicio para guardar en pedido.formasPago (ticket, reimpresión, corte de día)
+      descuento: req.body.descuento ?? null,
+      descuentoMonto: req.body.descuentoMonto != null ? Number(req.body.descuentoMonto) : null,
+      discountType: req.body.discountType ?? null,
+      discountName: req.body.discountName ?? null
     };
 
     const pago = await creditoAbonoService.createPago(pagoData);

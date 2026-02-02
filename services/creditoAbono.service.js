@@ -314,9 +314,13 @@ exports.createPago = async (pagoData) => {
     }
 
     // 1. Registrar en la tabla pagos_pedidos (breakdown)
-    if (pagoData.formasPago && Array.isArray(pagoData.formasPago)) {
+    // formasPago puede ser array o objeto { items: [...], descuento, descuentoMonto, ... }
+    const formasPagoArray = Array.isArray(pagoData.formasPago)
+      ? pagoData.formasPago
+      : (pagoData.formasPago && pagoData.formasPago.items) || [];
+    if (formasPagoArray.length > 0) {
       console.log('Procesando formas de pago para pedido:', pagoData.pedidoId);
-      for (const fp of pagoData.formasPago) {
+      for (const fp of formasPagoArray) {
         console.log('Forma de pago:', fp);
         // Registrar el pago del pedido
         await prisma.pagoPedido.create({
@@ -348,13 +352,24 @@ exports.createPago = async (pagoData) => {
       }
     }
 
-    // 3. Actualizar el pedido a entregado
+    // 3. Actualizar el pedido a entregado (guardar formasPago con items + descuento para ticket, reimpresión y corte de día)
+    const hasDiscount = pagoData.descuento != null || (pagoData.descuentoMonto != null && Number(pagoData.descuentoMonto) > 0);
+    const formasPagoToStore =
+      formasPagoArray.length > 0 || hasDiscount
+        ? {
+            items: formasPagoArray,
+            descuento: pagoData.descuento ?? null,
+            descuentoMonto: pagoData.descuentoMonto != null ? Number(pagoData.descuentoMonto) : null,
+            discountType: pagoData.discountType || null,
+            discountName: pagoData.discountName || null
+          }
+        : null;
     return await prisma.pedido.update({
       where: { id: pagoData.pedidoId },
       data: {
         estado: 'entregado',
         montoPagado: pagoData.montoTotal,
-        formasPago: pagoData.formasPago ? JSON.stringify(pagoData.formasPago) : null
+        formasPago: formasPagoToStore != null ? JSON.stringify(formasPagoToStore) : null
       },
       include: {
         cliente: true
@@ -363,11 +378,20 @@ exports.createPago = async (pagoData) => {
   }
 
   // SI ES UN ABONO GENERAL O PAGO A NOTA (Módulo Créditos y Abonos)
-    const nuevoPago = await prisma.pago.create({
+  // Evitar saldo negativo: limitar monto del abono al saldo actual del cliente
+  const saldoActualCliente = Number(cliente.saldoActual) || 0;
+  const montoSolicitado = Number(pagoData.montoTotal) || 0;
+  const montoAbono = Math.min(montoSolicitado, Math.max(0, saldoActualCliente));
+
+  if (montoAbono <= 0) {
+    throw new Error('El cliente no tiene saldo pendiente para abonar. No se puede registrar el abono.');
+  }
+
+  const nuevoPago = await prisma.pago.create({
       data: {
         clienteId: pagoData.clienteId,
         notaCreditoId: pagoData.notaCreditoId || null,
-        montoTotal: pagoData.montoTotal,
+        montoTotal: montoAbono,
         tipo: pagoData.tipo,
         fechaPago: new Date(pagoData.fechaPago),
         horaPago: pagoData.horaPago,
@@ -378,7 +402,7 @@ exports.createPago = async (pagoData) => {
         formasPago: {
           create: (pagoData.formasPago || []).map(fp => ({
             formaPagoId: fp.formaPagoId,
-            monto: fp.monto,
+            monto: montoAbono,
             referencia: fp.referencia || null,
             banco: fp.banco || null
           }))
@@ -407,7 +431,7 @@ exports.createPago = async (pagoData) => {
           await prisma.abonoCliente.create({
             data: {
               clienteId: pagoData.clienteId,
-              monto: parseFloat(fp.monto),
+              monto: montoAbono,
               fecha: new Date(pagoData.fechaPago),
               formaPagoId: fp.formaPagoId,
               folio: fp.referencia || null,
@@ -425,14 +449,12 @@ exports.createPago = async (pagoData) => {
       }
     }
 
-  // RESTAR DE LA DEUDA INMEDIATAMENTE (al crear el abono)
-  // Restar del saldo actual del cliente
+  // RESTAR DE LA DEUDA INMEDIATAMENTE (al crear el abono). Nunca dejar saldo negativo.
+  const nuevoSaldoCliente = Math.max(0, saldoActualCliente - montoAbono);
   await prisma.cliente.update({
     where: { id: pagoData.clienteId },
     data: {
-      saldoActual: {
-        decrement: pagoData.montoTotal
-      }
+      saldoActual: nuevoSaldoCliente
     }
   });
 
@@ -443,7 +465,7 @@ exports.createPago = async (pagoData) => {
     });
 
     if (notaCredito) {
-      const nuevoSaldo = Math.max(0, notaCredito.saldoPendiente - pagoData.montoTotal);
+      const nuevoSaldo = Math.max(0, notaCredito.saldoPendiente - montoAbono);
       const estado = nuevoSaldo === 0 ? 'pagada' : notaCredito.estado;
 
       await prisma.notaCredito.update({

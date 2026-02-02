@@ -408,6 +408,9 @@ exports.updatePedido = async (id, updateData) => {
   // Extraer productos del payload (no es un campo directo del modelo Pedido)
   const productos = updateData.productos;
   delete updateData.productos;
+  // Campos que la app envía pero no existen en el modelo Pedido
+  delete updateData.totalLitros;
+  delete updateData.totalMonto;
 
   // Convertir fechaPedido a DateTime si viene como string
   if (updateData.fechaPedido && typeof updateData.fechaPedido === 'string') {
@@ -428,10 +431,33 @@ exports.updatePedido = async (id, updateData) => {
     updateData.formasPago = JSON.stringify(updateData.formasPago);
   }
 
+  // Prisma update exige relaciones con connect/disconnect, no IDs directos (clienteId, repartidorId, etc.)
+  const clienteId = updateData.clienteId;
+  const repartidorId = updateData.repartidorId;
+  const rutaId = updateData.rutaId;
+  const sedeId = updateData.sedeId;
+  delete updateData.clienteId;
+  delete updateData.repartidorId;
+  delete updateData.rutaId;
+  delete updateData.sedeId;
+
+  const data = {
+    ...updateData,
+    cliente: clienteId ? { connect: { id: clienteId } } : undefined,
+    repartidor: repartidorId != null ? (repartidorId ? { connect: { id: repartidorId } } : { disconnect: true }) : undefined,
+    ruta: rutaId != null ? (rutaId ? { connect: { id: rutaId } } : { disconnect: true }) : undefined,
+    sede: sedeId != null ? (sedeId ? { connect: { id: sedeId } } : { disconnect: true }) : undefined
+  };
+  // Quitar undefined para no sobrescribir
+  if (data.cliente === undefined) delete data.cliente;
+  if (data.repartidor === undefined) delete data.repartidor;
+  if (data.ruta === undefined) delete data.ruta;
+  if (data.sede === undefined) delete data.sede;
+
   const resultado = await prisma.$transaction(async (tx) => {
     const pedidoActualizado = await tx.pedido.update({
       where: { id },
-      data: updateData,
+      data,
       include: {
         cliente: true,
         ruta: true,

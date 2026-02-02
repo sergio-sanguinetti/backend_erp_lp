@@ -70,11 +70,12 @@ exports.createCliente = async (clienteData) => {
     });
 
     // Crear domicilios si se proporcionan (cada uno con QR = su id)
+    // codigoQR en BD es VarChar(50): usar valor temporal corto; luego se actualiza al id del domicilio
     const domiciliosData = clienteData.domicilios || [];
     if (domiciliosData.length > 0) {
         for (let i = 0; i < domiciliosData.length; i++) {
             const domicilio = domiciliosData[i]
-            const tempCodigoQR = `temp-${nuevoCliente.id}-${i}-${Date.now()}`
+            const tempCodigoQR = `t-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 10)}`
             const creado = await prisma.domicilio.create({
                 data: {
                     clienteId: nuevoCliente.id,
@@ -706,7 +707,11 @@ exports.createDomicilio = async (clienteId, domicilioData) => {
         throw error;
     }
 
-    const tempCodigoQR = domicilioData.codigoQR || `temp-${clienteId}-${Date.now()}`;
+    // codigoQR en BD es VarChar(50): valor temporal corto; luego se actualiza al id del domicilio
+    const maxLen = 50;
+    const tempCodigoQR = (domicilioData.codigoQR && String(domicilioData.codigoQR).length <= maxLen)
+        ? String(domicilioData.codigoQR).slice(0, maxLen)
+        : `t-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     const nuevoDomicilio = await prisma.domicilio.create({
         data: {
             clienteId: clienteId,
