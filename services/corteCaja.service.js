@@ -1,6 +1,47 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-const { getTodayBoundsMexico } = require('../utils/timezoneMexico');
+const { getTodayBoundsMexico, getMexicoCityDayBounds } = require('../utils/timezoneMexico');
+
+/** Agrupa montos por tipo de forma de pago (efectivo, transferencia, tarjeta, etc.) */
+function agruparFormasPagoPedidos(pedidos) {
+  const resumen = { efectivo: 0, transferencia: 0, tarjeta: 0, cheque: 0, credito: 0, otros: 0 };
+  pedidos.forEach(p => {
+    if (!p.formasPago) return;
+    try {
+      const fp = typeof p.formasPago === 'string' ? JSON.parse(p.formasPago) : p.formasPago;
+      const items = Array.isArray(fp) ? fp : (fp?.items || []);
+      items.forEach(f => {
+        const monto = parseFloat(f.monto || 0);
+        const tipo = (f.tipo || f.nombre || '').toLowerCase();
+        if (tipo.includes('efectivo')) resumen.efectivo += monto;
+        else if (tipo.includes('transferencia')) resumen.transferencia += monto;
+        else if (tipo.includes('tarjeta') || tipo.includes('terminal')) resumen.tarjeta += monto;
+        else if (tipo.includes('cheque')) resumen.cheque += monto;
+        else if (tipo.includes('credito')) resumen.credito += monto;
+        else resumen.otros += monto;
+      });
+    } catch (e) {
+      console.error('Error parsing formasPago for pedido', p.id, e);
+    }
+  });
+  return resumen;
+}
+
+/** Agrupa montos de abonos por tipo de forma de pago según nombre de FormaPago */
+function agruparFormasPagoAbonos(abonos) {
+  const resumen = { efectivo: 0, transferencia: 0, tarjeta: 0, cheque: 0, credito: 0, otros: 0 };
+  abonos.forEach(a => {
+    const tipo = (a.formaPago?.nombre || '').toLowerCase();
+    const monto = parseFloat(a.monto || 0);
+    if (tipo.includes('efectivo')) resumen.efectivo += monto;
+    else if (tipo.includes('transferencia')) resumen.transferencia += monto;
+    else if (tipo.includes('tarjeta') || tipo.includes('terminal')) resumen.tarjeta += monto;
+    else if (tipo.includes('cheque')) resumen.cheque += monto;
+    else if (tipo.includes('credito')) resumen.credito += monto;
+    else resumen.otros += monto;
+  });
+  return resumen;
+}
 
 class CorteCajaService {
   async getTodaySummary(usuarioId) {
@@ -172,7 +213,7 @@ class CorteCajaService {
   }
 
   async getAllCortes() {
-    return await prisma.corteCaja.findMany({
+    const cortes = await prisma.corteCaja.findMany({
       include: {
         repartidor: true,
         depositos: true,
@@ -182,6 +223,45 @@ class CorteCajaService {
         fecha: 'desc'
       }
     });
+
+    const cortesEnriquecidos = await Promise.all(
+      cortes.map(async (corte) => {
+        const { start, end } = getMexicoCityDayBounds(corte.dia);
+        let resumenFormasPagoVenta = null;
+        let resumenFormasPagoAbono = null;
+
+        if (corte.tipo === 'venta_dia') {
+          const pedidos = await prisma.pedido.findMany({
+            where: {
+              repartidorId: corte.repartidorId,
+              fechaPedido: { gte: start, lte: end },
+              estado: 'entregado'
+            },
+            select: { formasPago: true }
+          });
+          resumenFormasPagoVenta = agruparFormasPagoPedidos(pedidos);
+        }
+
+        if (corte.tipo === 'abono') {
+          const abonos = await prisma.abonoCliente.findMany({
+            where: {
+              usuarioRegistro: corte.repartidorId,
+              fecha: { gte: start, lte: end }
+            },
+            include: { formaPago: true }
+          });
+          resumenFormasPagoAbono = agruparFormasPagoAbonos(abonos);
+        }
+
+        return {
+          ...corte,
+          resumenFormasPagoVenta,
+          resumenFormasPagoAbono
+        };
+      })
+    );
+
+    return cortesEnriquecidos;
   }
 
   async getCortesByRepartidor(usuarioId) {

@@ -387,7 +387,17 @@ exports.createPago = async (pagoData) => {
     throw new Error('El cliente no tiene saldo pendiente para abonar. No se puede registrar el abono.');
   }
 
-  const nuevoPago = await prisma.pago.create({
+    const formasPagoAbono = (pagoData.formasPago || []).map(fp => {
+      const montoFp = (fp.monto != null && fp.monto !== '') ? parseFloat(fp.monto) : null;
+      return {
+        formaPagoId: fp.formaPagoId,
+        monto: montoFp != null && !isNaN(montoFp) ? montoFp : montoAbono / Math.max(1, (pagoData.formasPago || []).length),
+        referencia: fp.referencia || null,
+        banco: fp.banco || null
+      };
+    });
+
+    const nuevoPago = await prisma.pago.create({
       data: {
         clienteId: pagoData.clienteId,
         notaCreditoId: pagoData.notaCreditoId || null,
@@ -400,12 +410,7 @@ exports.createPago = async (pagoData) => {
         usuarioAutorizacion: pagoData.usuarioAutorizacion || null,
         estado: pagoData.estado || 'pendiente',
         formasPago: {
-          create: (pagoData.formasPago || []).map(fp => ({
-            formaPagoId: fp.formaPagoId,
-            monto: montoAbono,
-            referencia: fp.referencia || null,
-            banco: fp.banco || null
-          }))
+          create: formasPagoAbono
         }
       },
       include: {
@@ -423,15 +428,15 @@ exports.createPago = async (pagoData) => {
       }
     });
 
-    // REGISTRAR EN LA TABLA abonos_cliente (según requerimiento)
-    if (pagoData.formasPago && Array.isArray(pagoData.formasPago)) {
+    // REGISTRAR EN LA TABLA abonos_cliente: una fila por forma de pago con su monto (no el total del abono)
+    if (formasPagoAbono && formasPagoAbono.length > 0) {
       console.log('--- REGISTRANDO EN abonos_cliente ---');
-      for (const fp of pagoData.formasPago) {
+      for (const fp of formasPagoAbono) {
         try {
           await prisma.abonoCliente.create({
             data: {
               clienteId: pagoData.clienteId,
-              monto: montoAbono,
+              monto: fp.monto,
               fecha: new Date(pagoData.fechaPago),
               formaPagoId: fp.formaPagoId,
               folio: fp.referencia || null,
@@ -440,10 +445,9 @@ exports.createPago = async (pagoData) => {
               observaciones: pagoData.observaciones || null
             }
           });
-          console.log('Abono registrado en abonos_cliente para fp:', fp.formaPagoId);
+          console.log('Abono registrado en abonos_cliente para fp:', fp.formaPagoId, 'monto:', fp.monto);
         } catch (error) {
           console.error('ERROR al registrar en abonos_cliente:', error);
-          // Si falla esta tabla, el pago general ya se creó, pero lanzamos error para informar al usuario
           throw new Error('El abono se creó pero falló el registro en abonos_cliente. Verifique la base de datos.');
         }
       }
