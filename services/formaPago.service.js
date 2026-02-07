@@ -160,7 +160,8 @@ exports.getAllFormasPago = async (filtros = {}) => {
     }
 
     if (filtros.activa !== undefined && filtros.activa !== '') {
-        where.activa = filtros.activa === 'activa' || filtros.activa === true;
+        const activaVal = filtros.activa;
+        where.activa = activaVal === 'activa' || activaVal === true || activaVal === 'true';
     }
 
     return await prisma.formaPago.findMany({

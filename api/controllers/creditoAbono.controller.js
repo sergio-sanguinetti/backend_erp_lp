@@ -147,6 +147,9 @@ exports.createPago = async (req, res, next) => {
       estado: req.body.estado || 'pendiente',
       formasPago: req.body.formasPago,
       firmaCliente: req.body.firmaCliente || null,
+      // Vigencia de pago para crédito: días o fecha (usado al crear la nota de crédito)
+      vigenciaPagoDias: req.body.vigenciaPagoDias != null ? Number(req.body.vigenciaPagoDias) : undefined,
+      fechaVencimiento: req.body.fechaVencimiento || undefined,
       // Descuento: pasar al servicio para guardar en pedido.formasPago (ticket, reimpresión, corte de día)
       descuento: req.body.descuento ?? null,
       descuentoMonto: req.body.descuentoMonto != null ? Number(req.body.descuentoMonto) : null,
@@ -195,7 +198,12 @@ exports.getResumenCartera = async (req, res, next) => {
   try {
     const filtros = {
       clienteId: req.query.clienteId,
-      rutaId: req.query.rutaId
+      rutaId: req.query.rutaId,
+      estadoCliente: req.query.estadoCliente,
+      fechaDesde: req.query.fechaDesde,
+      fechaHasta: req.query.fechaHasta,
+      saldoMin: req.query.saldoMin != null ? Number(req.query.saldoMin) : undefined,
+      saldoMax: req.query.saldoMax != null ? Number(req.query.saldoMax) : undefined
     };
 
     const resumen = await creditoAbonoService.getResumenCartera(filtros);
@@ -213,7 +221,9 @@ exports.getClientesCredito = async (req, res, next) => {
       nombre: req.query.nombre,
       rutaId: req.query.rutaId,
       estadoCliente: req.query.estadoCliente,
-      sedeId: req.query.sedeId
+      sedeId: req.query.sedeId,
+      saldoMin: req.query.saldoMin != null ? req.query.saldoMin : undefined,
+      saldoMax: req.query.saldoMax != null ? req.query.saldoMax : undefined
     };
 
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);

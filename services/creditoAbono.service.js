@@ -1,5 +1,19 @@
 // services/creditoAbono.service.js
 const { prisma } = require('../config/database');
+const { getMexicoCityDayBounds } = require('../utils/timezoneMexico');
+
+/** Normaliza fecha a YYYY-MM-DD. Acepta YYYY-MM-DD o DD/MM/YYYY. */
+function normalizarFechaStr(str) {
+  if (!str || typeof str !== 'string') return null;
+  const s = str.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const ddmmyyyy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (ddmmyyyy) {
+    const [, d, m, y] = ddmmyyyy;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  return s;
+}
 
 // ========== NOTAS DE CRÉDITO ==========
 
@@ -339,11 +353,20 @@ exports.createPago = async (pagoData) => {
           console.log('--- DETECTADO PAGO CON CRÉDITO ---');
           console.log('Monto:', fp.monto);
           console.log('ClienteId:', pagoData.clienteId);
+          let fechaVencimientoCredito;
+          if (pagoData.fechaVencimiento) {
+            fechaVencimientoCredito = new Date(pagoData.fechaVencimiento);
+          } else {
+            const dias = (pagoData.vigenciaPagoDias != null && !Number.isNaN(Number(pagoData.vigenciaPagoDias)) && Number(pagoData.vigenciaPagoDias) > 0)
+              ? Number(pagoData.vigenciaPagoDias)
+              : 15;
+            fechaVencimientoCredito = new Date(Date.now() + dias * 24 * 60 * 60 * 1000);
+          }
           await createNotaCreditoLocal({
             clienteId: pagoData.clienteId,
             pedidoId: pagoData.pedidoId,
             fechaVenta: new Date(),
-            fechaVencimiento: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000), // 15 días por defecto
+            fechaVencimiento: fechaVencimientoCredito,
             importe: parseFloat(fp.monto),
             observaciones: `Crédito generado desde venta de pedido ${pedido.numeroPedido || pedido.id}`
           });
@@ -462,7 +485,9 @@ exports.createPago = async (pagoData) => {
     }
   });
 
-  // Si es pago a nota específica, actualizar saldo pendiente de la nota
+  let aplicacionDetalle = null;
+
+  // Si es pago a nota específica: actualizar solo esa nota
   if (pagoData.notaCreditoId) {
     const notaCredito = await prisma.notaCredito.findUnique({
       where: { id: pagoData.notaCreditoId }
@@ -479,10 +504,60 @@ exports.createPago = async (pagoData) => {
           estado
         }
       });
+      aplicacionDetalle = [{
+        notaId: notaCredito.id,
+        numeroNota: notaCredito.numeroNota,
+        montoAplicado: montoAbono,
+        saldoAnterior: notaCredito.saldoPendiente,
+        saldoRestante: nuevoSaldo,
+        estadoNota: estado
+      }];
+    }
+  } else {
+    // Abono global: aplicar FIFO (notas más antiguas primero)
+    const notasPendientes = await prisma.notaCredito.findMany({
+      where: {
+        clienteId: pagoData.clienteId,
+        estado: { not: 'pagada' },
+        saldoPendiente: { gt: 0 }
+      },
+      orderBy: { fechaVenta: 'asc' }
+    });
+
+    let resto = montoAbono;
+    aplicacionDetalle = [];
+
+    for (const nota of notasPendientes) {
+      if (resto <= 0) break;
+      const montoAplicar = Math.min(resto, Number(nota.saldoPendiente));
+      if (montoAplicar <= 0) continue;
+
+      const saldoAnterior = Number(nota.saldoPendiente);
+      const saldoRestante = Math.max(0, saldoAnterior - montoAplicar);
+      const estadoNota = saldoRestante === 0 ? 'pagada' : nota.estado;
+
+      await prisma.notaCredito.update({
+        where: { id: nota.id },
+        data: {
+          saldoPendiente: saldoRestante,
+          estado: estadoNota
+        }
+      });
+
+      aplicacionDetalle.push({
+        notaId: nota.id,
+        numeroNota: nota.numeroNota,
+        montoAplicado: montoAplicar,
+        saldoAnterior,
+        saldoRestante,
+        estadoNota
+      });
+      resto -= montoAplicar;
     }
   }
 
-  return nuevoPago;
+  const pagoConDetalle = { ...nuevoPago, aplicacionDetalle };
+  return pagoConDetalle;
 };
 
 exports.getAllPagos = async (filtros = {}) => {
@@ -496,25 +571,40 @@ exports.getAllPagos = async (filtros = {}) => {
     where.estado = filtros.estado;
   }
 
-  if (filtros.fechaDesde) {
+  let rangeStart;
+  let rangeEnd;
+  const fechaDesdeNorm = normalizarFechaStr(filtros.fechaDesde);
+  const fechaHastaNorm = normalizarFechaStr(filtros.fechaHasta);
+  if (fechaDesdeNorm) {
+    const { start } = getMexicoCityDayBounds(fechaDesdeNorm);
+    rangeStart = start;
     where.fechaPago = {
       ...where.fechaPago,
-      gte: new Date(filtros.fechaDesde)
+      gte: start
     };
   }
-
-  if (filtros.fechaHasta) {
+  if (fechaHastaNorm) {
+    const { end } = getMexicoCityDayBounds(fechaHastaNorm);
+    rangeEnd = end;
     where.fechaPago = {
       ...where.fechaPago,
-      lte: new Date(filtros.fechaHasta)
+      lte: end
     };
+  }
+  if (!rangeEnd && rangeStart && fechaDesdeNorm) {
+    const { end } = getMexicoCityDayBounds(fechaDesdeNorm);
+    rangeEnd = end;
+  }
+  if (!rangeStart && rangeEnd && fechaHastaNorm) {
+    const { start } = getMexicoCityDayBounds(fechaHastaNorm);
+    rangeStart = start;
   }
 
   if (filtros.rutaId) {
     where.cliente = { rutaId: filtros.rutaId };
   }
 
-  return await prisma.pago.findMany({
+  const pagos = await prisma.pago.findMany({
     where,
     include: {
       cliente: {
@@ -533,6 +623,88 @@ exports.getAllPagos = async (filtros = {}) => {
       fechaPago: 'desc'
     }
   });
+
+  // Incluir también abonos de abonos_cliente que no tengan pago en la tabla pagos
+  const hasDateFilter = rangeStart != null && rangeEnd != null;
+  if (hasDateFilter) {
+    try {
+      const whereAbono = {
+        fecha: { gte: rangeStart, lte: rangeEnd }
+      };
+      if (filtros.clienteId) whereAbono.clienteId = filtros.clienteId;
+      if (filtros.rutaId) whereAbono.cliente = { rutaId: filtros.rutaId };
+
+      const abonos = await prisma.abonoCliente.findMany({
+        where: whereAbono,
+        include: {
+          cliente: { include: { ruta: true } },
+          formaPago: true,
+          notaCredito: true
+        },
+        orderBy: { fecha: 'desc' }
+      });
+
+      const key = (a) => {
+        const d = new Date(a.fecha);
+        const day = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+        return `${a.clienteId}|${day}|${a.notaCreditoId || ''}`;
+      };
+      const grupos = new Map();
+      for (const a of abonos) {
+        const k = key(a);
+        if (!grupos.has(k)) grupos.set(k, []);
+        grupos.get(k).push(a);
+      }
+
+      const pagosKeys = new Set(
+        pagos.map((p) => {
+          const d = new Date(p.fechaPago);
+          const day = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+          return `${p.clienteId}|${day}|${p.notaCreditoId || ''}`;
+        })
+      );
+
+      for (const [, grupo] of grupos) {
+        const k = key(grupo[0]);
+        if (pagosKeys.has(k)) continue;
+        const primero = grupo[0];
+        const fechaPago = new Date(primero.fecha);
+        const horaPago = `${String(fechaPago.getUTCHours()).padStart(2, '0')}:${String(fechaPago.getUTCMinutes()).padStart(2, '0')}`;
+        const montoTotal = grupo.reduce((s, a) => s + a.monto, 0);
+        pagos.push({
+          id: `abono_${primero.id}`,
+          clienteId: primero.clienteId,
+          notaCreditoId: primero.notaCreditoId,
+          montoTotal,
+          tipo: primero.notaCreditoId ? 'nota_especifica' : 'abono_general',
+          fechaPago,
+          horaPago,
+          observaciones: primero.observaciones || null,
+          usuarioRegistro: primero.usuarioRegistro,
+          usuarioAutorizacion: null,
+          estado: 'autorizado',
+          cliente: primero.cliente,
+          notaCredito: primero.notaCredito,
+          formasPago: grupo.map((a) => {
+            const fp = a.formaPago;
+            const metodo = (fp && (fp.tipo || fp.nombre)) ? (fp.tipo || fp.nombre) : 'efectivo';
+            return {
+              id: a.id,
+              monto: a.monto,
+              metodo: String(metodo),
+              formaPago: fp
+            };
+          })
+        });
+      }
+
+      pagos.sort((a, b) => new Date(b.fechaPago) - new Date(a.fechaPago));
+    } catch (err) {
+      console.error('getAllPagos: error al incluir abonos_cliente:', err.message);
+    }
+  }
+
+  return pagos;
 };
 
 exports.getPagoById = async (id) => {
@@ -589,41 +761,16 @@ exports.updatePagoEstado = async (id, estado, usuarioAutorizacion) => {
     }
   });
 
-  // Si se autoriza el pago, actualizar saldos
-  if (estado === 'autorizado' && pago.estado !== 'autorizado') {
-    // Actualizar saldo del cliente
-    await prisma.cliente.update({
-      where: { id: pago.clienteId },
-      data: {
-        saldoActual: {
-          decrement: pago.montoTotal
-        }
-      }
-    });
+  // Los abonos (pagos a nota o abono general) ya aplican la reducción de deuda al crearse en createPago.
+  // Al autorizar NO se debe volver a restar del saldo: el límite de crédito NUNCA debe cambiar por pagos,
+  // y el adeudo (saldoActual) ya fue restado al registrar el pago. Si volviéramos a decrementar aquí,
+  // saldoActual quedaría negativo y crédito disponible = limiteCredito - saldoActual parecería que el límite subió.
+  // Por tanto: al pasar a 'autorizado' solo actualizamos el estado del pago, no tocamos cliente ni nota.
 
-    // Si es pago a nota específica, actualizar saldo pendiente
-    if (pago.notaCreditoId) {
-      const notaCredito = await prisma.notaCredito.findUnique({
-        where: { id: pago.notaCreditoId }
-      });
-
-      if (notaCredito) {
-        const nuevoSaldo = Math.max(0, notaCredito.saldoPendiente - pago.montoTotal);
-        const estadoNota = nuevoSaldo === 0 ? 'pagada' : notaCredito.estado;
-
-        await prisma.notaCredito.update({
-          where: { id: pago.notaCreditoId },
-          data: {
-            saldoPendiente: nuevoSaldo,
-            estado: estadoNota
-          }
-        });
-      }
-    }
-  }
-
-  // Si se rechaza o cancela un pago autorizado, revertir saldos
-  if ((estado === 'rechazado' || estado === 'cancelado') && pago.estado === 'autorizado') {
+  // Si se rechaza o cancela un pago, revertir la aplicación del abono (la deuda vuelve a subir).
+  // Solo revertir cuando pasamos de pendiente/autorizado a rechazado/cancelado (no si ya estaba rechazado).
+  const estabaAplicado = pago.estado !== 'rechazado' && pago.estado !== 'cancelado';
+  if ((estado === 'rechazado' || estado === 'cancelado') && estabaAplicado) {
     await prisma.cliente.update({
       where: { id: pago.clienteId },
       data: {
@@ -656,6 +803,8 @@ exports.updatePagoEstado = async (id, estado, usuarioAutorizacion) => {
 
 // ========== RESUMEN DE CARTERA ==========
 
+const ESTADO_CLIENTE_VALIDOS = ['activo', 'suspendido', 'inactivo'];
+
 exports.getResumenCartera = async (filtros = {}) => {
   const where = {
     estado: { not: 'pagada' }
@@ -665,8 +814,35 @@ exports.getResumenCartera = async (filtros = {}) => {
     where.clienteId = filtros.clienteId;
   }
 
+  // Filtro por fechas (fecha de venta de la nota)
+  const fechaDesdeNorm = normalizarFechaStr(filtros.fechaDesde);
+  const fechaHastaNorm = normalizarFechaStr(filtros.fechaHasta);
+  if (fechaDesdeNorm) {
+    const { start } = getMexicoCityDayBounds(fechaDesdeNorm);
+    where.fechaVenta = { ...where.fechaVenta, gte: start };
+  }
+  if (fechaHastaNorm) {
+    const { end } = getMexicoCityDayBounds(fechaHastaNorm);
+    where.fechaVenta = { ...where.fechaVenta, lte: end };
+  }
+
+  // Filtros por cliente: ruta, estadoCliente (enum), saldo mínimo/máximo
+  const clienteWhere = {};
   if (filtros.rutaId) {
-    where.cliente = { rutaId: filtros.rutaId };
+    clienteWhere.rutaId = filtros.rutaId;
+  }
+  if (filtros.estadoCliente && ESTADO_CLIENTE_VALIDOS.includes(String(filtros.estadoCliente).toLowerCase())) {
+    clienteWhere.estadoCliente = filtros.estadoCliente.toLowerCase();
+  }
+  const saldoMin = filtros.saldoMin != null && !Number.isNaN(Number(filtros.saldoMin)) ? Number(filtros.saldoMin) : null;
+  const saldoMax = filtros.saldoMax != null && !Number.isNaN(Number(filtros.saldoMax)) ? Number(filtros.saldoMax) : null;
+  if (saldoMin != null || saldoMax != null) {
+    clienteWhere.saldoActual = {};
+    if (saldoMin != null) clienteWhere.saldoActual.gte = saldoMin;
+    if (saldoMax != null) clienteWhere.saldoActual.lte = saldoMax;
+  }
+  if (Object.keys(clienteWhere).length > 0) {
+    where.cliente = clienteWhere;
   }
 
   const notas = await prisma.notaCredito.findMany({

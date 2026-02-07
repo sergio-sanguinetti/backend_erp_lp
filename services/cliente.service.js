@@ -2,6 +2,9 @@
 
 const { prisma } = require('../config/database');
 
+// Valores válidos del enum EstadoCliente en Prisma (no confundir con estado de crédito: buen-pagador/vencido/critico/bloqueado)
+const ESTADO_CLIENTE_VALIDOS = ['activo', 'suspendido', 'inactivo'];
+
 // Tabla de mapeo de rutas Excel a códigos del sistema
 const MAPEO_RUTAS = {
   'RUTA P 1DH': 'R1PDH',
@@ -161,8 +164,8 @@ exports.getAllClientes = async (filtros = {}) => {
         where.email = { contains: filtros.email };
     }
 
-    if (filtros.estadoCliente) {
-        where.estadoCliente = filtros.estadoCliente;
+    if (filtros.estadoCliente && ESTADO_CLIENTE_VALIDOS.includes(String(filtros.estadoCliente).toLowerCase())) {
+        where.estadoCliente = filtros.estadoCliente.toLowerCase();
     }
 
     if (filtros.rutaId) {
@@ -258,12 +261,20 @@ exports.getClientesPaginados = async (filtros = {}, page = 1, pageSize = 10) => 
         where.email = { contains: filtros.email };
     }
 
-    if (filtros.estadoCliente) {
-        where.estadoCliente = filtros.estadoCliente;
+    if (filtros.estadoCliente && ESTADO_CLIENTE_VALIDOS.includes(String(filtros.estadoCliente).toLowerCase())) {
+        where.estadoCliente = filtros.estadoCliente.toLowerCase();
     }
 
     if (filtros.rutaId) {
         where.rutaId = filtros.rutaId;
+    }
+
+    const saldoMin = filtros.saldoMin != null && !Number.isNaN(Number(filtros.saldoMin)) ? Number(filtros.saldoMin) : null;
+    const saldoMax = filtros.saldoMax != null && !Number.isNaN(Number(filtros.saldoMax)) ? Number(filtros.saldoMax) : null;
+    if (saldoMin != null || saldoMax != null) {
+        where.saldoActual = {};
+        if (saldoMin != null) where.saldoActual.gte = saldoMin;
+        if (saldoMax != null) where.saldoActual.lte = saldoMax;
     }
 
     if (filtros.sedeId) {

@@ -89,8 +89,26 @@ class CorteCajaService {
       }
     });
 
+    // Cargar formas de pago para resolver formaPagoId -> tipo/nombre (la app envía formaPagoId y tipo 'metodo_pago')
+    const formasPagoRows = await prisma.formaPago.findMany({
+      where: { activa: true },
+      select: { id: true, tipo: true, nombre: true }
+    });
+    const formaPagoMap = {};
+    formasPagoRows.forEach(f => {
+      formaPagoMap[f.id] = { tipo: (f.tipo || '').toLowerCase(), nombre: (f.nombre || '').toLowerCase() };
+    });
+
+    function getTipoFromItem(f) {
+      const rawTipo = (f.tipo || '').toLowerCase();
+      if (rawTipo.includes('efectivo') || rawTipo.includes('credito') || rawTipo.includes('transferencia') || rawTipo.includes('cheque') || rawTipo.includes('tarjeta') || rawTipo.includes('terminal')) return rawTipo;
+      const resolved = formaPagoMap[f.formaPagoId];
+      if (resolved) return resolved.tipo || resolved.nombre || '';
+      return (f.nombre || '').toLowerCase();
+    }
+
     // Calcular totales por forma de pago de pedidos
-    // Nota: Los pedidos tienen un campo formasPago que es un string JSON
+    // Nota: Los pedidos tienen un campo formasPago que es un string JSON (puede ser array o { items: [] })
     const stats = {
       sales: pedidos.length,
       totalSales: 0,
@@ -111,12 +129,13 @@ class CorteCajaService {
           const items = Array.isArray(fp) ? fp : (fp?.items || []);
           items.forEach(f => {
             const monto = parseFloat(f.monto || 0);
-            const tipo = (f.tipo || '').toLowerCase();
+            const tipo = getTipoFromItem(f);
             if (tipo.includes('efectivo')) stats.efectivo += monto;
             else if (tipo.includes('transferencia')) stats.transferencia += monto;
             else if (tipo.includes('tarjeta') || tipo.includes('terminal')) stats.tarjeta += monto;
             else if (tipo.includes('cheque')) stats.cheque += monto;
             else if (tipo.includes('credito')) stats.credito += monto;
+            else if (tipo.includes('deposito')) stats.otros += monto;
             else stats.otros += monto;
           });
         } catch (e) {
