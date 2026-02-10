@@ -344,16 +344,18 @@ model Pedido {
 }
 
 model PedidoProducto {
-  id         String   @id @default(uuid())
-  pedidoId   String   @map("pedido_id")
-  productoId String   @map("producto_id")
-  cantidad   Int
-  precio     Float
-  subtotal   Float
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-  pedido     Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
-  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  id             String   @id @default(uuid())
+  pedidoId       String   @map("pedido_id")
+  productoId     String   @map("producto_id")
+  cantidad       Int
+  precio         Float
+  subtotal       Float
+  descuento      String?  @db.VarChar(100)
+  descuentoMonto Float?   @map("descuento_monto")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  pedido         Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  producto       Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
 
   @@index([pedidoId], map: "pedido_productos_pedido_id_fkey")
   @@index([productoId], map: "pedido_productos_producto_id_fkey")

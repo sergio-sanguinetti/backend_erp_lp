@@ -316,14 +316,24 @@ exports.createPedido = async (pedidoData) => {
       calculoPipas: pedidoData.calculoPipas ? JSON.stringify(pedidoData.calculoPipas) : null,
       formasPago: pedidoData.formasPago ? JSON.stringify(pedidoData.formasPago) : null,
       sedeId: pedidoData.sedeId || null,
-      // Crear los productos del pedido
+      // Crear los productos del pedido (subtotal puede ser neto si hay descuento por línea)
       productosPedido: pedidoData.productos ? {
-        create: pedidoData.productos.map(p => ({
-          productoId: p.productoId,
-          cantidad: p.cantidad,
-          precio: p.precio,
-          subtotal: p.precio * p.cantidad
-        }))
+        create: pedidoData.productos.map(p => {
+          const cantidadRaw = parseFloat(p.cantidad) || 0;
+          const cantidad = Math.round(cantidadRaw);
+          const precio = parseFloat(p.precio) || 0;
+          const descuentoMonto = p.descuentoMonto != null ? parseFloat(p.descuentoMonto) : 0;
+          const subtotalBruto = cantidadRaw * precio;
+          const subtotal = p.subtotal != null ? parseFloat(p.subtotal) : Math.max(0, subtotalBruto - descuentoMonto);
+          return {
+            productoId: p.productoId,
+            cantidad: cantidad || 1,
+            precio: precio,
+            subtotal,
+            descuento: p.descuento && String(p.descuento).trim() ? String(p.descuento).trim().slice(0, 100) : null,
+            descuentoMonto: descuentoMonto > 0 ? descuentoMonto : null,
+          };
+        })
       } : undefined
     },
     include: {
@@ -417,10 +427,13 @@ exports.updatePedido = async (id, updateData) => {
     updateData.fechaPedido = new Date(updateData.fechaPedido);
   }
 
-  // Recalcular ventaTotal y cantidadProductos si se actualizan productos
+  // Recalcular ventaTotal y cantidadProductos si se actualizan productos (subtotal puede ser neto con descuento por línea)
   if (productos && Array.isArray(productos)) {
     updateData.cantidadProductos = productos.length;
-    updateData.ventaTotal = productos.reduce((sum, p) => sum + (p.precio * p.cantidad), 0);
+    updateData.ventaTotal = productos.reduce((sum, p) => {
+      const sub = p.subtotal != null ? parseFloat(p.subtotal) : (Number(p.precio) || 0) * (Number(p.cantidad) || 0);
+      return sum + sub;
+    }, 0);
   }
 
   // Stringify calculoPipas y formasPago si vienen como objetos
@@ -469,14 +482,25 @@ exports.updatePedido = async (id, updateData) => {
     if (productos && Array.isArray(productos)) {
       await tx.pedidoProducto.deleteMany({ where: { pedidoId: id } });
       if (productos.length > 0) {
+        const cantidadNum = (p) => Math.round(Number(p.cantidad)) || 0;
+        const precioNum = (p) => Number(p.precio) || 0;
         await tx.pedidoProducto.createMany({
-          data: productos.map((p) => ({
-            pedidoId: id,
-            productoId: p.productoId,
-            cantidad: Math.round(Number(p.cantidad)) || 0,
-            precio: Number(p.precio) || 0,
-            subtotal: (Number(p.precio) || 0) * (Math.round(Number(p.cantidad)) || 0)
-          }))
+          data: productos.map((p) => {
+            const cantidad = cantidadNum(p);
+            const precio = precioNum(p);
+            const descuentoMonto = p.descuentoMonto != null ? parseFloat(p.descuentoMonto) : 0;
+            const subtotalBruto = cantidad * precio;
+            const subtotal = p.subtotal != null ? parseFloat(p.subtotal) : Math.max(0, subtotalBruto - descuentoMonto);
+            return {
+              pedidoId: id,
+              productoId: p.productoId,
+              cantidad,
+              precio,
+              subtotal,
+              descuento: p.descuento && String(p.descuento).trim() ? String(p.descuento).trim().slice(0, 100) : null,
+              descuentoMonto: descuentoMonto > 0 ? descuentoMonto : null,
+            };
+          })
         });
       }
     }
