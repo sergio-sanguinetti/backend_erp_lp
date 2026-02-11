@@ -7,23 +7,23 @@ const ESTADO_CLIENTE_VALIDOS = ['activo', 'suspendido', 'inactivo'];
 
 // Tabla de mapeo de rutas Excel a códigos del sistema
 const MAPEO_RUTAS = {
-  'RUTA P 1DH': 'R1PDH',
-  'RUTA P 1SMA': 'R1PSMA',
-  'RUTA P 2DH': 'R2PDH',
-  'RUTA P 2SMA': 'R2PSMA',
-  'RUTA P 3DH': 'R3PDH',
-  'R C 1DH': 'R1CDH',
-  'R C 1SMA': 'R1CSMA',
-  'R C 2DH': 'R2CDH',
-  'R C 3SMA': 'R3CSMA'
+    'RUTA P 1DH': 'R1PDH',
+    'RUTA P 1SMA': 'R1PSMA',
+    'RUTA P 2DH': 'R2PDH',
+    'RUTA P 2SMA': 'R2PSMA',
+    'RUTA P 3DH': 'R3PDH',
+    'R C 1DH': 'R1CDH',
+    'R C 1SMA': 'R1CSMA',
+    'R C 2DH': 'R2CDH',
+    'R C 3SMA': 'R3CSMA'
 };
 
 // Función para generar código QR único
 const generarCodigoQR = (clienteId, index) => {
-  // Usar los últimos 3 caracteres del ID del cliente o un número
-  const clienteHash = clienteId ? clienteId.substring(clienteId.length - 3) : '000'
-  const sufijo = String.fromCharCode(65 + (index % 26)) // A-Z
-  return `QR${clienteHash}${sufijo}`
+    // Usar los últimos 3 caracteres del ID del cliente o un número
+    const clienteHash = clienteId ? clienteId.substring(clienteId.length - 3) : '000'
+    const sufijo = String.fromCharCode(65 + (index % 26)) // A-Z
+    return `QR${clienteHash}${sufijo}`
 }
 
 exports.createCliente = async (clienteData) => {
@@ -37,7 +37,7 @@ exports.createCliente = async (clienteData) => {
         const existingCliente = await prisma.cliente.findUnique({
             where: { email: emailNormalizado }
         });
-        
+
         if (existingCliente) {
             const error = new Error('Ya existe un cliente con ese email.');
             error.status = 409; // Conflict
@@ -180,9 +180,9 @@ exports.getAllClientes = async (filtros = {}) => {
             where: { sedeId: filtros.sedeId },
             select: { id: true }
         });
-        
+
         const rutasIds = rutasDeSede.map(r => r.id);
-        
+
         if (rutasIds.length > 0) {
             // Incluir clientes con rutas de la sede O clientes sin ruta asignada
             andConditions.push({
@@ -219,7 +219,7 @@ exports.getAllClientes = async (filtros = {}) => {
             },
             orderBy: { fechaRegistro: 'desc' }
         });
-        
+
         // Normalizar emails null a string vacío si es necesario (para compatibilidad)
         return clientes.map(cliente => ({
             ...cliente,
@@ -341,54 +341,54 @@ exports.updateCliente = async (id, updateData) => {
                     id: { not: id }
                 }
             });
-            
+
             if (existingCliente) {
                 const error = new Error('Ya existe un cliente con ese email.');
                 error.status = 409; // Conflict
                 throw error;
             }
         }
-        
+
         // Actualizar el email normalizado
         updateData.email = emailNormalizado;
     }
 
     // Normalizar otros campos opcionales que pueden venir como strings vacíos
     if (updateData.telefonoSecundario !== undefined) {
-        updateData.telefonoSecundario = (updateData.telefonoSecundario && updateData.telefonoSecundario.trim() !== '') 
-            ? updateData.telefonoSecundario 
+        updateData.telefonoSecundario = (updateData.telefonoSecundario && updateData.telefonoSecundario.trim() !== '')
+            ? updateData.telefonoSecundario
             : null;
     }
-    
+
     if (updateData.numeroInterior !== undefined) {
-        updateData.numeroInterior = (updateData.numeroInterior && updateData.numeroInterior.trim() !== '') 
-            ? updateData.numeroInterior 
+        updateData.numeroInterior = (updateData.numeroInterior && updateData.numeroInterior.trim() !== '')
+            ? updateData.numeroInterior
             : null;
     }
-    
+
     if (updateData.rfc !== undefined) {
-        updateData.rfc = (updateData.rfc && updateData.rfc.trim() !== '') 
-            ? updateData.rfc 
+        updateData.rfc = (updateData.rfc && updateData.rfc.trim() !== '')
+            ? updateData.rfc
             : null;
     }
-    
+
     if (updateData.curp !== undefined) {
-        updateData.curp = (updateData.curp && updateData.curp.trim() !== '') 
-            ? updateData.curp 
+        updateData.curp = (updateData.curp && updateData.curp.trim() !== '')
+            ? updateData.curp
             : null;
     }
-    
+
     // Normalizar rutaId: convertir strings vacíos, undefined, o null a null
     if (updateData.rutaId !== undefined) {
-        updateData.rutaId = (updateData.rutaId && typeof updateData.rutaId === 'string' && updateData.rutaId.trim() !== '') 
-            ? updateData.rutaId.trim() 
+        updateData.rutaId = (updateData.rutaId && typeof updateData.rutaId === 'string' && updateData.rutaId.trim() !== '')
+            ? updateData.rutaId.trim()
             : null;
     }
-    
+
     // Normalizar zonaId: convertir strings vacíos, undefined, o null a null
     if (updateData.zonaId !== undefined) {
-        updateData.zonaId = (updateData.zonaId && typeof updateData.zonaId === 'string' && updateData.zonaId.trim() !== '') 
-            ? updateData.zonaId.trim() 
+        updateData.zonaId = (updateData.zonaId && typeof updateData.zonaId === 'string' && updateData.zonaId.trim() !== '')
+            ? updateData.zonaId.trim()
             : null;
     }
 
@@ -458,7 +458,7 @@ const dividirNombre = (nombreCompleto) => {
     }
 
     const partes = nombreCompleto.trim().split(/\s+/);
-    
+
     if (partes.length === 0) {
         return {
             nombre: '',
@@ -505,9 +505,9 @@ exports.importarClientesMasivo = async (archivoBuffer, nombreArchivo) => {
         const workbook = XLSX.read(archivoBuffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        
+
         // Convertir a JSON
-        const datos = XLSX.utils.sheet_to_json(worksheet, { 
+        const datos = XLSX.utils.sheet_to_json(worksheet, {
             header: 1,
             defval: null,
             raw: false
@@ -519,12 +519,12 @@ exports.importarClientesMasivo = async (archivoBuffer, nombreArchivo) => {
 
         // Obtener el encabezado (primera fila)
         const encabezados = datos[0].map(h => h ? h.toString().trim().toUpperCase() : '');
-        
+
         // Buscar índices de las columnas necesarias
-        const indiceCliente = encabezados.findIndex(h => 
+        const indiceCliente = encabezados.findIndex(h =>
             h.includes('CLIENTE') || h === 'CLIENTE'
         );
-        const indiceRuta = encabezados.findIndex(h => 
+        const indiceRuta = encabezados.findIndex(h =>
             h.includes('RUTA_PRINCIPAL') || h.includes('RUTA PRINCIPAL') || h === 'RUTA_PRINCIPAL'
         );
 
@@ -565,7 +565,7 @@ exports.importarClientesMasivo = async (archivoBuffer, nombreArchivo) => {
 
                 // Obtener el código de la ruta del sistema
                 const codigoRuta = obtenerCodigoRuta(rutaPrincipal);
-                
+
                 if (!codigoRuta) {
                     resultados.errores.push({
                         fila: i + 1,
@@ -577,7 +577,7 @@ exports.importarClientesMasivo = async (archivoBuffer, nombreArchivo) => {
 
                 // Buscar la ruta en la base de datos
                 const ruta = await buscarRutaPorCodigo(codigoRuta);
-                
+
                 if (!ruta) {
                     resultados.errores.push({
                         fila: i + 1,
@@ -663,7 +663,7 @@ exports.buscarPorQR = async (codigo) => {
         if (parsed.domicilioId) idBuscar = parsed.domicilioId;
         else if (parsed.clienteId) idBuscar = parsed.clienteId;
         else if (parsed.id) idBuscar = parsed.id;
-    } catch (_) {}
+    } catch (_) { }
     if (!UUID_REGEX.test(idBuscar)) {
         const error = new Error('Código QR no reconocido.');
         error.status = 404;
@@ -791,6 +791,15 @@ exports.getClientesByRutasPaginated = async (rutaIds, opts = {}) => {
     const where = {
         rutaId: { in: rutaIds },
     };
+
+    if (opts.updatedAfter) {
+        const date = new Date(opts.updatedAfter);
+        if (!isNaN(date.getTime())) {
+            where.updatedAt = {
+                gte: date
+            };
+        }
+    }
 
     if (q.length > 0) {
         where.OR = [

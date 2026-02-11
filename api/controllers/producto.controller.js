@@ -6,7 +6,8 @@ exports.getAllProductos = async (req, res, next) => {
     const filtros = {
       categoria: req.query.categoria,
       activo: req.query.activo,
-      sedeId: req.query.sedeId
+      sedeId: req.query.sedeId,
+      updatedAfter: req.query.updatedAfter
     };
 
     const productos = await productoService.getAllProductos(filtros);

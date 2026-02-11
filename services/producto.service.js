@@ -5,18 +5,27 @@ const { prisma } = require('../config/database');
 exports.getAllProductos = async (filtros = {}) => {
   // Construir where clause explícitamente, asegurándonos de usar solo campos que existen en la tabla
   const where = {};
-  
+
   // Solo usar categoriaId, nunca categoria (que es una relación, no una columna)
   if (filtros.categoria) {
     where.categoriaId = filtros.categoria;
   }
-  
+
   if (filtros.activo !== undefined) {
     where.activo = filtros.activo === 'true' || filtros.activo === true;
   }
-  
+
   if (filtros.sedeId) {
     where.sedeId = filtros.sedeId;
+  }
+
+  if (filtros.updatedAfter) {
+    const date = new Date(filtros.updatedAfter);
+    if (!isNaN(date.getTime())) {
+      where.updatedAt = {
+        gte: date
+      };
+    }
   }
 
   // Obtener productos SOLO con sede, sin intentar incluir categoria (es una relación)
@@ -134,7 +143,7 @@ exports.createProducto = async (productoData) => {
     const sede = await prisma.sede.findUnique({
       where: { id: productoData.sedeId }
     });
-    
+
     if (!sede) {
       const error = new Error('La sede especificada no existe.');
       error.status = 404;
@@ -146,7 +155,7 @@ exports.createProducto = async (productoData) => {
   const categoria = await prisma.categoriaProducto.findUnique({
     where: { id: productoData.categoriaId }
   });
-  
+
   if (!categoria) {
     const error = new Error('La categoría especificada no existe.');
     error.status = 404;
@@ -193,7 +202,7 @@ exports.createProducto = async (productoData) => {
       }
     }
   });
-  
+
   // Agregar categoria manualmente
   if (nuevoProducto.categoriaId) {
     try {
@@ -225,7 +234,7 @@ exports.updateProducto = async (id, updateData) => {
     const sede = await prisma.sede.findUnique({
       where: { id: updateData.sedeId }
     });
-    
+
     if (!sede) {
       const error = new Error('La sede especificada no existe.');
       error.status = 404;
@@ -238,7 +247,7 @@ exports.updateProducto = async (id, updateData) => {
     const categoria = await prisma.categoriaProducto.findUnique({
       where: { id: updateData.categoriaId }
     });
-    
+
     if (!categoria) {
       const error = new Error('La categoría especificada no existe.');
       error.status = 404;
@@ -287,7 +296,7 @@ exports.updateProducto = async (id, updateData) => {
       }
     }
   });
-  
+
   // Agregar categoria manualmente
   if (productoActualizado.categoriaId) {
     try {

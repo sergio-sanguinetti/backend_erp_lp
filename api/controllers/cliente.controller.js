@@ -16,6 +16,7 @@ exports.getClientesByRutasPaginated = async (req, res, next) => {
             limit,
             offset,
             q,
+            updatedAfter: req.query.updatedAfter,
         });
 
         res.status(200).json(result);
@@ -46,7 +47,7 @@ exports.getClienteById = async (req, res, next) => {
     try {
         const { id } = req.params;
         const cliente = await clienteService.findClienteById(id);
-        
+
         if (!cliente) {
             return res.status(404).json({ message: 'Cliente no encontrado.' });
         }
@@ -115,7 +116,7 @@ exports.deleteCliente = async (req, res, next) => {
     try {
         const { id } = req.params;
         const cliente = await clienteService.deleteCliente(id);
-        
+
         if (!cliente) {
             return res.status(404).json({ message: 'Cliente no encontrado.' });
         }
@@ -149,7 +150,7 @@ exports.createDomicilio = async (req, res, next) => {
     try {
         const { clienteId } = req.params;
         const domicilio = await clienteService.createDomicilio(clienteId, req.body);
-        
+
         res.status(201).json({
             message: 'Domicilio creado exitosamente.',
             domicilio: domicilio
@@ -164,7 +165,7 @@ exports.updateDomicilio = async (req, res, next) => {
     try {
         const { id } = req.params;
         const domicilio = await clienteService.updateDomicilio(id, req.body);
-        
+
         res.status(200).json({
             message: 'Domicilio actualizado exitosamente.',
             domicilio: domicilio
@@ -179,7 +180,7 @@ exports.deleteDomicilio = async (req, res, next) => {
     try {
         const { id } = req.params;
         await clienteService.deleteDomicilio(id);
-        
+
         res.status(200).json({
             message: 'Domicilio eliminado exitosamente.'
         });
@@ -192,10 +193,10 @@ exports.deleteDomicilio = async (req, res, next) => {
 exports.importarClientesMasivo = async (req, res, next) => {
     try {
         if (!req.file) {
-            return res.status(400).json({ 
-                message: 'No se proporcionó ningún archivo.' 
+            return res.status(400).json({
+                message: 'No se proporcionó ningún archivo.'
             });
-        }        const resultados = await clienteService.importarClientesMasivo(
+        } const resultados = await clienteService.importarClientesMasivo(
             req.file.buffer,
             req.file.originalname
         );
