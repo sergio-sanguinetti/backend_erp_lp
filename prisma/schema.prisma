@@ -587,6 +587,10 @@ model CorteCaja {
   totalOtros    Float               @default(0) @map("total_otros")
   estado        EstadoCorte         @default(pendiente)
   observaciones String?             @db.VarChar(1000)
+  stats         String?             @db.LongText
+  dailySales    String?             @map("daily_sales") @db.LongText
+  totalLitros   Float?              @default(0) @map("total_litros")
+  totalProductosUnidades Int?       @default(0) @map("total_productos_unidades")
   createdAt     DateTime            @default(now()) @map("created_at")
   updatedAt     DateTime            @updatedAt @map("updated_at")
   dia           String              @db.VarChar(10)

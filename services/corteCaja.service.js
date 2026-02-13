@@ -179,16 +179,18 @@ class CorteCajaService {
   }
 
   async createCorte(data) {
-    const { 
-      repartidorId, 
-      tipo, 
-      totalVentas, 
-      totalAbonos, 
-      totalEfectivo, 
-      totalOtros, 
-      observaciones, 
-      detalles, 
-      depositos 
+    const {
+      repartidorId,
+      tipo,
+      totalVentas,
+      totalAbonos,
+      totalEfectivo,
+      totalOtros,
+      observaciones,
+      detalles,
+      depositos,
+      stats,
+      dailySales
     } = data;
 
     const today = new Date();
@@ -200,6 +202,10 @@ class CorteCajaService {
       throw new Error(`Ya se ha generado un corte de tipo ${tipo} el día de hoy.`);
     }
 
+    // Extract totalLitros and totalProductosUnidades from stats if available
+    const totalLitros = stats?.totalLitros || 0;
+    const totalProductosUnidades = stats?.totalProductosUnidades || 0;
+
     return await prisma.corteCaja.create({
       data: {
         repartidorId,
@@ -210,6 +216,10 @@ class CorteCajaService {
         totalEfectivo,
         totalOtros,
         observaciones,
+        stats: stats ? JSON.stringify(stats) : null,
+        dailySales: dailySales ? JSON.stringify(dailySales) : null,
+        totalLitros,
+        totalProductosUnidades,
         detalles: {
           create: detalles.map(d => ({
             referenciaId: d.referenciaId,
@@ -300,7 +310,7 @@ class CorteCajaService {
     if (usuarioId) {
       where.repartidorId = usuarioId;
     }
-    return await prisma.corteCaja.findFirst({
+    const corte = await prisma.corteCaja.findFirst({
       where,
       include: {
         repartidor: true,
@@ -308,6 +318,26 @@ class CorteCajaService {
         detalles: true
       }
     });
+
+    if (!corte) return null;
+
+    // Parse JSON fields
+    if (corte.stats && typeof corte.stats === 'string') {
+      try {
+        corte.stats = JSON.parse(corte.stats);
+      } catch (e) {
+        console.error('Error parsing stats:', e);
+      }
+    }
+    if (corte.dailySales && typeof corte.dailySales === 'string') {
+      try {
+        corte.dailySales = JSON.parse(corte.dailySales);
+      } catch (e) {
+        console.error('Error parsing dailySales:', e);
+      }
+    }
+
+    return corte;
   }
 
   async getCorteResumenPorTipoServicio(tipoServicio, sedeId) {
