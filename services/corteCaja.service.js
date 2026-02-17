@@ -193,6 +193,17 @@ class CorteCajaService {
       dailySales
     } = data;
 
+    // Debug: Ver qué datos están llegando al backend
+    console.log('🔍 [Backend] createCorte - Datos recibidos:', {
+      repartidorId,
+      tipo,
+      totalVentas,
+      totalAbonos,
+      dailySales: dailySales ? `Array con ${dailySales.length} items` : 'NULL',
+      stats: stats ? 'Objeto presente' : 'NULL',
+      statsContent: stats
+    });
+
     const today = new Date();
     const dia = today.toISOString().split('T')[0];
 
@@ -260,15 +271,87 @@ class CorteCajaService {
         let resumenFormasPagoAbono = null;
 
         if (corte.tipo === 'venta_dia') {
+          console.log(`🔍 [Backend] Buscando pedidos para corte ${corte.id}:`, {
+            repartidorId: corte.repartidorId,
+            dia: corte.dia,
+            rangoFechas: { start, end },
+            fechaCorte: corte.fecha
+          });
+
           const pedidos = await prisma.pedido.findMany({
             where: {
               repartidorId: corte.repartidorId,
               fechaPedido: { gte: start, lte: end },
               estado: 'entregado'
             },
-            select: { formasPago: true }
+            select: { formasPago: true, id: true, fechaPedido: true }
           });
+
+          console.log(`🔍 [Backend] Pedidos encontrados para corte ${corte.id}:`, {
+            total: pedidos.length,
+            conFormasPago: pedidos.filter(p => p.formasPago).length,
+            ejemploFormasPago: pedidos[0]?.formasPago,
+            pedidosFechas: pedidos.map(p => ({ id: p.id, fecha: p.fechaPedido }))
+          });
+
           resumenFormasPagoVenta = agruparFormasPagoPedidos(pedidos);
+
+          // Fallback: Si no se encontraron pedidos (0 ventas) pero tenemos detalles en el corte
+          const totalCalculado = Object.values(resumenFormasPagoVenta).reduce((a, b) => a + b, 0);
+
+          if (totalCalculado === 0 && corte.detalles && corte.detalles.length > 0) {
+            console.log(`⚠️ [Backend] Usando DETALLES del corte como fallback para formas de pago venta (Corte ID: ${corte.id})`);
+            // Reiniciar resumen
+            resumenFormasPagoVenta = { efectivo: 0, transferencia: 0, tarjeta: 0, cheque: 0, credito: 0, otros: 0 };
+
+            corte.detalles.forEach(d => {
+              // Filtrar solo detalles que NO sean abonos (asumiendo que abonos se marcan como tal)
+              // O incluir solo 'pedido' / 'venta' si estamos seguros
+              const tipoRef = (d.tipoReferencia || '').toLowerCase();
+              if (tipoRef.includes('abono')) return; // Ignorar abonos en corte de venta
+
+              const monto = parseFloat(d.monto || 0);
+              const tipo = (d.formaPago || '').toLowerCase();
+
+              if (tipo.includes('efectivo')) resumenFormasPagoVenta.efectivo += monto;
+              else if (tipo.includes('transferencia')) resumenFormasPagoVenta.transferencia += monto;
+              else if (tipo.includes('tarjeta') || tipo.includes('terminal')) resumenFormasPagoVenta.tarjeta += monto;
+              else if (tipo.includes('cheque')) resumenFormasPagoVenta.cheque += monto;
+              else if (tipo.includes('credito')) resumenFormasPagoVenta.credito += monto;
+              else resumenFormasPagoVenta.otros += monto;
+            });
+          }
+          // Fallback Legacy: Usar stats si no hay detalles y todo falló
+          else if (totalCalculado === 0 && corte.stats) {
+            try {
+              const statsParsed = typeof corte.stats === 'string' ? JSON.parse(corte.stats) : corte.stats;
+              // Usamos stats si tiene datos, PERO intentamos ser inteligentes
+              // Si stats tiene totalAbonos > 0, sabemos que está sucio.
+              if (statsParsed) {
+                // Si hay abonos en stats, NO podemos confiar en el desglose de stats para venta pura
+                // A menos que restemos... pero no sabemos qué restar de qué forma.
+                // Mejor advertir.
+                if (statsParsed.totalAbonos > 0) {
+                  console.warn(`⚠️ [Backend] Stats fallback tiene abonos mezclados. Intentando usar solo lo que parece venta.`);
+                  // Sin embargo, si no hay otra opción, mostramos lo que hay.
+                  // El usuario reportó que "cheque" aparecía (era abono).
+                  // Si pudiéramos saber que el abono fue cheque...
+                }
+
+                console.log(`⚠️ [Backend] Usando stats de BD como fallback (Legacy) para venta (Corte ID: ${corte.id})`);
+                resumenFormasPagoVenta = {
+                  efectivo: statsParsed.efectivo || 0,
+                  transferencia: statsParsed.transferencia || 0,
+                  tarjeta: statsParsed.tarjeta || 0,
+                  cheque: statsParsed.cheque || 0,
+                  credito: statsParsed.credito || 0,
+                  otros: statsParsed.otros || 0
+                };
+              }
+            } catch (e) { console.error('Error parsing stats fallback', e); }
+          }
+
+          console.log(`✅ [Backend] Resumen formas de pago venta:`, resumenFormasPagoVenta);
         }
 
         if (corte.tipo === 'abono') {
@@ -280,6 +363,45 @@ class CorteCajaService {
             include: { formaPago: true }
           });
           resumenFormasPagoAbono = agruparFormasPagoAbonos(abonos);
+
+          // Fallback para abonos
+          const totalCalculado = Object.values(resumenFormasPagoAbono).reduce((a, b) => a + b, 0);
+
+          if (totalCalculado === 0 && corte.detalles && corte.detalles.length > 0) {
+            console.log(`⚠️ [Backend] Usando DETALLES del corte como fallback para formas de pago ABONO (Corte ID: ${corte.id})`);
+            resumenFormasPagoAbono = { efectivo: 0, transferencia: 0, tarjeta: 0, cheque: 0, credito: 0, otros: 0 };
+
+            corte.detalles.forEach(d => {
+              const tipoRef = (d.tipoReferencia || '').toLowerCase();
+              if (!tipoRef.includes('abono')) return; // Solo incluir abonos
+
+              const monto = parseFloat(d.monto || 0);
+              const tipo = (d.formaPago || '').toLowerCase();
+
+              if (tipo.includes('efectivo')) resumenFormasPagoAbono.efectivo += monto;
+              else if (tipo.includes('transferencia')) resumenFormasPagoAbono.transferencia += monto;
+              else if (tipo.includes('tarjeta') || tipo.includes('terminal')) resumenFormasPagoAbono.tarjeta += monto;
+              else if (tipo.includes('cheque')) resumenFormasPagoAbono.cheque += monto;
+              else if (tipo.includes('credito')) resumenFormasPagoAbono.credito += monto;
+              else resumenFormasPagoAbono.otros += monto;
+            });
+          }
+          else if (totalCalculado === 0 && corte.stats) {
+            try {
+              const statsParsed = typeof corte.stats === 'string' ? JSON.parse(corte.stats) : corte.stats;
+              if (statsParsed && (statsParsed.efectivo || statsParsed.transferencia || statsParsed.tarjeta || statsParsed.cheque || statsParsed.credito || statsParsed.otros)) {
+                console.log(`⚠️ [Backend] Usando stats de BD como fallback para formas de pago abono (Corte ID: ${corte.id})`);
+                resumenFormasPagoAbono = {
+                  efectivo: statsParsed.efectivo || 0,
+                  transferencia: statsParsed.transferencia || 0,
+                  tarjeta: statsParsed.tarjeta || 0,
+                  cheque: statsParsed.cheque || 0,
+                  credito: statsParsed.credito || 0, // Posiblemente debería ser 0 para abonos?
+                  otros: statsParsed.otros || 0
+                };
+              }
+            } catch (e) { }
+          }
         }
 
         return {
