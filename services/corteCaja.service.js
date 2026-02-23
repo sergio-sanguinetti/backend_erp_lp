@@ -4,7 +4,7 @@ const { getTodayBoundsMexico, getMexicoCityDayBounds } = require('../utils/timez
 
 /** Agrupa montos por tipo de forma de pago (efectivo, transferencia, tarjeta, etc.) */
 function agruparFormasPagoPedidos(pedidos) {
-  const resumen = { efectivo: 0, transferencia: 0, tarjeta: 0, cheque: 0, credito: 0, otros: 0 };
+  const resumen = { efectivo: 0, transferencia: 0, tarjeta: 0, cheque: 0, credito: 0, deposito: 0, otros: 0 };
   pedidos.forEach(p => {
     if (!p.formasPago) return;
     try {
@@ -18,6 +18,7 @@ function agruparFormasPagoPedidos(pedidos) {
         else if (tipo.includes('tarjeta') || tipo.includes('terminal')) resumen.tarjeta += monto;
         else if (tipo.includes('cheque')) resumen.cheque += monto;
         else if (tipo.includes('credito')) resumen.credito += monto;
+        else if (tipo.includes('deposito') || tipo.includes('depósito')) resumen.deposito += monto;
         else resumen.otros += monto;
       });
     } catch (e) {
@@ -29,7 +30,7 @@ function agruparFormasPagoPedidos(pedidos) {
 
 /** Agrupa montos de abonos por tipo de forma de pago según nombre de FormaPago */
 function agruparFormasPagoAbonos(abonos) {
-  const resumen = { efectivo: 0, transferencia: 0, tarjeta: 0, cheque: 0, credito: 0, otros: 0 };
+  const resumen = { efectivo: 0, transferencia: 0, tarjeta: 0, cheque: 0, credito: 0, deposito: 0, otros: 0 };
   abonos.forEach(a => {
     const tipo = (a.formaPago?.nombre || '').toLowerCase();
     const monto = parseFloat(a.monto || 0);
@@ -38,6 +39,7 @@ function agruparFormasPagoAbonos(abonos) {
     else if (tipo.includes('tarjeta') || tipo.includes('terminal')) resumen.tarjeta += monto;
     else if (tipo.includes('cheque')) resumen.cheque += monto;
     else if (tipo.includes('credito')) resumen.credito += monto;
+    else if (tipo.includes('deposito') || tipo.includes('depósito')) resumen.deposito += monto;
     else resumen.otros += monto;
   });
   return resumen;
@@ -135,7 +137,9 @@ class CorteCajaService {
             else if (tipo.includes('tarjeta') || tipo.includes('terminal')) stats.tarjeta += monto;
             else if (tipo.includes('cheque')) stats.cheque += monto;
             else if (tipo.includes('credito')) stats.credito += monto;
-            else if (tipo.includes('deposito')) stats.otros += monto;
+            else if (tipo.includes('deposito') || tipo.includes('depósito')) {
+              stats.deposito = (stats.deposito || 0) + monto;
+            }
             else stats.otros += monto;
           });
         } catch (e) {
@@ -151,6 +155,9 @@ class CorteCajaService {
       else if (tipo.includes('transferencia')) stats.transferencia += a.monto;
       else if (tipo.includes('tarjeta') || tipo.includes('terminal')) stats.tarjeta += a.monto;
       else if (tipo.includes('cheque')) stats.cheque += a.monto;
+      else if (tipo.includes('deposito') || tipo.includes('depósito')) {
+        stats.deposito = (stats.deposito || 0) + a.monto;
+      }
       else stats.otros += a.monto;
     });
 
@@ -271,136 +278,156 @@ class CorteCajaService {
         let resumenFormasPagoAbono = null;
 
         if (corte.tipo === 'venta_dia') {
-          console.log(`🔍 [Backend] Buscando pedidos para corte ${corte.id}:`, {
-            repartidorId: corte.repartidorId,
-            dia: corte.dia,
-            rangoFechas: { start, end },
-            fechaCorte: corte.fecha
-          });
-
-          const pedidos = await prisma.pedido.findMany({
-            where: {
-              repartidorId: corte.repartidorId,
-              fechaPedido: { gte: start, lte: end },
-              estado: 'entregado'
-            },
-            select: { formasPago: true, id: true, fechaPedido: true }
-          });
-
-          console.log(`🔍 [Backend] Pedidos encontrados para corte ${corte.id}:`, {
-            total: pedidos.length,
-            conFormasPago: pedidos.filter(p => p.formasPago).length,
-            ejemploFormasPago: pedidos[0]?.formasPago,
-            pedidosFechas: pedidos.map(p => ({ id: p.id, fecha: p.fechaPedido }))
-          });
-
-          resumenFormasPagoVenta = agruparFormasPagoPedidos(pedidos);
-
-          // Fallback: Si no se encontraron pedidos (0 ventas) pero tenemos detalles en el corte
-          const totalCalculado = Object.values(resumenFormasPagoVenta).reduce((a, b) => a + b, 0);
-
-          if (totalCalculado === 0 && corte.detalles && corte.detalles.length > 0) {
-            console.log(`⚠️ [Backend] Usando DETALLES del corte como fallback para formas de pago venta (Corte ID: ${corte.id})`);
-            // Reiniciar resumen
-            resumenFormasPagoVenta = { efectivo: 0, transferencia: 0, tarjeta: 0, cheque: 0, credito: 0, otros: 0 };
-
-            corte.detalles.forEach(d => {
-              // Filtrar solo detalles que NO sean abonos (asumiendo que abonos se marcan como tal)
-              // O incluir solo 'pedido' / 'venta' si estamos seguros
-              const tipoRef = (d.tipoReferencia || '').toLowerCase();
-              if (tipoRef.includes('abono')) return; // Ignorar abonos en corte de venta
-
-              const monto = parseFloat(d.monto || 0);
-              const tipo = (d.formaPago || '').toLowerCase();
-
-              if (tipo.includes('efectivo')) resumenFormasPagoVenta.efectivo += monto;
-              else if (tipo.includes('transferencia')) resumenFormasPagoVenta.transferencia += monto;
-              else if (tipo.includes('tarjeta') || tipo.includes('terminal')) resumenFormasPagoVenta.tarjeta += monto;
-              else if (tipo.includes('cheque')) resumenFormasPagoVenta.cheque += monto;
-              else if (tipo.includes('credito')) resumenFormasPagoVenta.credito += monto;
-              else resumenFormasPagoVenta.otros += monto;
-            });
-          }
-          // Fallback Legacy: Usar stats si no hay detalles y todo falló
-          else if (totalCalculado === 0 && corte.stats) {
+          let usedStats = false;
+          if (corte.stats) {
             try {
               const statsParsed = typeof corte.stats === 'string' ? JSON.parse(corte.stats) : corte.stats;
-              // Usamos stats si tiene datos, PERO intentamos ser inteligentes
-              // Si stats tiene totalAbonos > 0, sabemos que está sucio.
               if (statsParsed) {
-                // Si hay abonos en stats, NO podemos confiar en el desglose de stats para venta pura
-                // A menos que restemos... pero no sabemos qué restar de qué forma.
-                // Mejor advertir.
-                if (statsParsed.totalAbonos > 0) {
-                  console.warn(`⚠️ [Backend] Stats fallback tiene abonos mezclados. Intentando usar solo lo que parece venta.`);
-                  // Sin embargo, si no hay otra opción, mostramos lo que hay.
-                  // El usuario reportó que "cheque" aparecía (era abono).
-                  // Si pudiéramos saber que el abono fue cheque...
-                }
+                const totalStats = (parseFloat(statsParsed.efectivo) || 0) +
+                  (parseFloat(statsParsed.transferencia) || 0) +
+                  (parseFloat(statsParsed.tarjeta) || 0) +
+                  (parseFloat(statsParsed.cheque) || 0) +
+                  (parseFloat(statsParsed.credito) || 0) +
+                  (parseFloat(statsParsed.deposito) || 0) +
+                  (parseFloat(statsParsed.otros) || 0);
 
-                console.log(`⚠️ [Backend] Usando stats de BD como fallback (Legacy) para venta (Corte ID: ${corte.id})`);
-                resumenFormasPagoVenta = {
-                  efectivo: statsParsed.efectivo || 0,
-                  transferencia: statsParsed.transferencia || 0,
-                  tarjeta: statsParsed.tarjeta || 0,
-                  cheque: statsParsed.cheque || 0,
-                  credito: statsParsed.credito || 0,
-                  otros: statsParsed.otros || 0
-                };
+                if (totalStats > 0) {
+                  console.log(`✅ [Backend] Usando stats de la app para formas de pago venta (Corte ID: ${corte.id})`);
+                  resumenFormasPagoVenta = {
+                    efectivo: parseFloat(statsParsed.efectivo) || 0,
+                    transferencia: parseFloat(statsParsed.transferencia) || 0,
+                    tarjeta: parseFloat(statsParsed.tarjeta) || 0,
+                    cheque: parseFloat(statsParsed.cheque) || 0,
+                    credito: parseFloat(statsParsed.credito) || 0,
+                    deposito: parseFloat(statsParsed.deposito) || 0,
+                    otros: parseFloat(statsParsed.otros) || 0
+                  };
+                  usedStats = true;
+                }
               }
-            } catch (e) { console.error('Error parsing stats fallback', e); }
+            } catch (e) {
+              console.error('Error parsing stats', e);
+            }
+          }
+
+          if (!usedStats) {
+            console.log(`🔍 [Backend] Buscando pedidos para corte ${corte.id}:`, {
+              repartidorId: corte.repartidorId,
+              dia: corte.dia,
+              rangoFechas: { start, end },
+              fechaCorte: corte.fecha
+            });
+
+            const pedidos = await prisma.pedido.findMany({
+              where: {
+                repartidorId: corte.repartidorId,
+                fechaPedido: { gte: start, lte: end },
+                estado: 'entregado'
+              },
+              select: { formasPago: true, id: true, fechaPedido: true }
+            });
+
+            console.log(`🔍 [Backend] Pedidos encontrados para corte ${corte.id}:`, {
+              total: pedidos.length,
+              conFormasPago: pedidos.filter(p => p.formasPago).length,
+              ejemploFormasPago: pedidos[0]?.formasPago,
+              pedidosFechas: pedidos.map(p => ({ id: p.id, fecha: p.fechaPedido }))
+            });
+
+            resumenFormasPagoVenta = agruparFormasPagoPedidos(pedidos);
+
+            const totalCalculado = Object.values(resumenFormasPagoVenta).reduce((a, b) => a + b, 0);
+
+            if (totalCalculado === 0 && corte.detalles && corte.detalles.length > 0) {
+              console.log(`⚠️ [Backend] Usando DETALLES del corte como fallback para formas de pago venta (Corte ID: ${corte.id})`);
+              resumenFormasPagoVenta = { efectivo: 0, transferencia: 0, tarjeta: 0, cheque: 0, credito: 0, deposito: 0, otros: 0 };
+
+              corte.detalles.forEach(d => {
+                const tipoRef = (d.tipoReferencia || '').toLowerCase();
+                if (tipoRef.includes('abono')) return; // Ignorar abonos en corte de venta
+
+                const monto = parseFloat(d.monto || 0);
+                const tipo = (d.formaPago || '').toLowerCase();
+
+                if (tipo.includes('efectivo')) resumenFormasPagoVenta.efectivo += monto;
+                else if (tipo.includes('transferencia')) resumenFormasPagoVenta.transferencia += monto;
+                else if (tipo.includes('tarjeta') || tipo.includes('terminal')) resumenFormasPagoVenta.tarjeta += monto;
+                else if (tipo.includes('cheque')) resumenFormasPagoVenta.cheque += monto;
+                else if (tipo.includes('credito')) resumenFormasPagoVenta.credito += monto;
+                else if (tipo.includes('deposito') || tipo.includes('depósito')) resumenFormasPagoVenta.deposito += monto;
+                else resumenFormasPagoVenta.otros += monto;
+              });
+            }
           }
 
           console.log(`✅ [Backend] Resumen formas de pago venta:`, resumenFormasPagoVenta);
         }
 
         if (corte.tipo === 'abono') {
-          const abonos = await prisma.abonoCliente.findMany({
-            where: {
-              usuarioRegistro: corte.repartidorId,
-              fecha: { gte: start, lte: end }
-            },
-            include: { formaPago: true }
-          });
-          resumenFormasPagoAbono = agruparFormasPagoAbonos(abonos);
-
-          // Fallback para abonos
-          const totalCalculado = Object.values(resumenFormasPagoAbono).reduce((a, b) => a + b, 0);
-
-          if (totalCalculado === 0 && corte.detalles && corte.detalles.length > 0) {
-            console.log(`⚠️ [Backend] Usando DETALLES del corte como fallback para formas de pago ABONO (Corte ID: ${corte.id})`);
-            resumenFormasPagoAbono = { efectivo: 0, transferencia: 0, tarjeta: 0, cheque: 0, credito: 0, otros: 0 };
-
-            corte.detalles.forEach(d => {
-              const tipoRef = (d.tipoReferencia || '').toLowerCase();
-              if (!tipoRef.includes('abono')) return; // Solo incluir abonos
-
-              const monto = parseFloat(d.monto || 0);
-              const tipo = (d.formaPago || '').toLowerCase();
-
-              if (tipo.includes('efectivo')) resumenFormasPagoAbono.efectivo += monto;
-              else if (tipo.includes('transferencia')) resumenFormasPagoAbono.transferencia += monto;
-              else if (tipo.includes('tarjeta') || tipo.includes('terminal')) resumenFormasPagoAbono.tarjeta += monto;
-              else if (tipo.includes('cheque')) resumenFormasPagoAbono.cheque += monto;
-              else if (tipo.includes('credito')) resumenFormasPagoAbono.credito += monto;
-              else resumenFormasPagoAbono.otros += monto;
-            });
-          }
-          else if (totalCalculado === 0 && corte.stats) {
+          let usedStatsAbono = false;
+          if (corte.stats) {
             try {
               const statsParsed = typeof corte.stats === 'string' ? JSON.parse(corte.stats) : corte.stats;
-              if (statsParsed && (statsParsed.efectivo || statsParsed.transferencia || statsParsed.tarjeta || statsParsed.cheque || statsParsed.credito || statsParsed.otros)) {
-                console.log(`⚠️ [Backend] Usando stats de BD como fallback para formas de pago abono (Corte ID: ${corte.id})`);
-                resumenFormasPagoAbono = {
-                  efectivo: statsParsed.efectivo || 0,
-                  transferencia: statsParsed.transferencia || 0,
-                  tarjeta: statsParsed.tarjeta || 0,
-                  cheque: statsParsed.cheque || 0,
-                  credito: statsParsed.credito || 0, // Posiblemente debería ser 0 para abonos?
-                  otros: statsParsed.otros || 0
-                };
+              if (statsParsed) {
+                const totalStats = (parseFloat(statsParsed.efectivo) || 0) +
+                  (parseFloat(statsParsed.transferencia) || 0) +
+                  (parseFloat(statsParsed.tarjeta) || 0) +
+                  (parseFloat(statsParsed.cheque) || 0) +
+                  (parseFloat(statsParsed.credito) || 0) +
+                  (parseFloat(statsParsed.deposito) || 0) +
+                  (parseFloat(statsParsed.otros) || 0);
+
+                if (totalStats > 0) {
+                  console.log(`✅ [Backend] Usando stats de la app para formas de pago abono (Corte ID: ${corte.id})`);
+                  resumenFormasPagoAbono = {
+                    efectivo: parseFloat(statsParsed.efectivo) || 0,
+                    transferencia: parseFloat(statsParsed.transferencia) || 0,
+                    tarjeta: parseFloat(statsParsed.tarjeta) || 0,
+                    cheque: parseFloat(statsParsed.cheque) || 0,
+                    credito: parseFloat(statsParsed.credito) || 0,
+                    deposito: parseFloat(statsParsed.deposito) || 0,
+                    otros: parseFloat(statsParsed.otros) || 0
+                  };
+                  usedStatsAbono = true;
+                }
               }
-            } catch (e) { }
+            } catch (e) {
+              console.error('Error parsing stats abono', e);
+            }
+          }
+
+          if (!usedStatsAbono) {
+            const abonos = await prisma.abonoCliente.findMany({
+              where: {
+                usuarioRegistro: corte.repartidorId,
+                fecha: { gte: start, lte: end }
+              },
+              include: { formaPago: true }
+            });
+            resumenFormasPagoAbono = agruparFormasPagoAbonos(abonos);
+
+            const totalCalculado = Object.values(resumenFormasPagoAbono).reduce((a, b) => a + b, 0);
+
+            if (totalCalculado === 0 && corte.detalles && corte.detalles.length > 0) {
+              console.log(`⚠️ [Backend] Usando DETALLES del corte como fallback para formas de pago ABONO (Corte ID: ${corte.id})`);
+              resumenFormasPagoAbono = { efectivo: 0, transferencia: 0, tarjeta: 0, cheque: 0, credito: 0, deposito: 0, otros: 0 };
+
+              corte.detalles.forEach(d => {
+                const tipoRef = (d.tipoReferencia || '').toLowerCase();
+                if (!tipoRef.includes('abono')) return; // Solo incluir abonos
+
+                const monto = parseFloat(d.monto || 0);
+                const tipo = (d.formaPago || '').toLowerCase();
+
+                if (tipo.includes('efectivo')) resumenFormasPagoAbono.efectivo += monto;
+                else if (tipo.includes('transferencia')) resumenFormasPagoAbono.transferencia += monto;
+                else if (tipo.includes('tarjeta') || tipo.includes('terminal')) resumenFormasPagoAbono.tarjeta += monto;
+                else if (tipo.includes('cheque')) resumenFormasPagoAbono.cheque += monto;
+                else if (tipo.includes('credito')) resumenFormasPagoAbono.credito += monto;
+                else if (tipo.includes('deposito') || tipo.includes('depósito')) resumenFormasPagoAbono.deposito += monto;
+                else resumenFormasPagoAbono.otros += monto;
+              });
+            }
           }
         }
 
