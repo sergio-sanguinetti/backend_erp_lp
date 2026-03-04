@@ -860,18 +860,38 @@ exports.getResumenCartera = async (filtros = {}) => {
   }
   const saldoMin = filtros.saldoMin != null && !Number.isNaN(Number(filtros.saldoMin)) ? Number(filtros.saldoMin) : null;
   const saldoMax = filtros.saldoMax != null && !Number.isNaN(Number(filtros.saldoMax)) ? Number(filtros.saldoMax) : null;
+
+  const andConditions = [];
+
   if (saldoMin != null || saldoMax != null) {
-    clienteWhere.saldoActual = {};
-    if (saldoMin != null) clienteWhere.saldoActual.gte = saldoMin;
-    if (saldoMax != null) clienteWhere.saldoActual.lte = saldoMax;
+    if (saldoMin != null && saldoMax == null && saldoMin > 0) {
+      andConditions.push({
+        OR: [
+          { saldoActual: { gte: saldoMin } },
+          { notasCredito: { some: { estado: { in: ['vigente', 'vencida', 'por_vencer'] }, saldoPendiente: { gt: 0 } } } },
+          { pagos: { some: { estado: 'pendiente' } } }
+        ]
+      });
+    } else {
+      clienteWhere.saldoActual = {};
+      if (saldoMin != null) clienteWhere.saldoActual.gte = saldoMin;
+      if (saldoMax != null) clienteWhere.saldoActual.lte = saldoMax;
+    }
   }
+
   if (filtros.sedeId) {
     const rutasDeSede = await prisma.ruta.findMany({
       where: { sedeId: filtros.sedeId },
       select: { id: true }
     });
     const rutasIds = rutasDeSede.map(r => r.id);
-    clienteWhere.OR = [{ rutaId: { in: rutasIds } }, { rutaId: null }];
+    andConditions.push({
+      OR: [{ rutaId: { in: rutasIds } }, { rutaId: null }]
+    });
+  }
+
+  if (andConditions.length > 0) {
+    clienteWhere.AND = andConditions;
   }
 
   if (Object.keys(clienteWhere).length > 0) {

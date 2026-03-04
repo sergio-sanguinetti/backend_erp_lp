@@ -272,9 +272,21 @@ exports.getClientesPaginados = async (filtros = {}, page = 1, pageSize = 10) => 
     const saldoMin = filtros.saldoMin != null && !Number.isNaN(Number(filtros.saldoMin)) ? Number(filtros.saldoMin) : null;
     const saldoMax = filtros.saldoMax != null && !Number.isNaN(Number(filtros.saldoMax)) ? Number(filtros.saldoMax) : null;
     if (saldoMin != null || saldoMax != null) {
-        where.saldoActual = {};
-        if (saldoMin != null) where.saldoActual.gte = saldoMin;
-        if (saldoMax != null) where.saldoActual.lte = saldoMax;
+        if (saldoMin != null && saldoMax == null && saldoMin > 0) {
+            // Requerimiento: "clientes que tengan crédito utilizado OR nota pendiente OR pagos pendientes"
+            // Cuando desde el front se envía solo saldoMin > 0 (ej. 0.01), asumimos esta lógica ampliada
+            andConditions.push({
+                OR: [
+                    { saldoActual: { gte: saldoMin } },
+                    { notasCredito: { some: { estado: { in: ['vigente', 'vencida', 'por_vencer'] }, saldoPendiente: { gt: 0 } } } },
+                    { pagos: { some: { estado: 'pendiente' } } }
+                ]
+            });
+        } else {
+            where.saldoActual = {};
+            if (saldoMin != null) where.saldoActual.gte = saldoMin;
+            if (saldoMax != null) where.saldoActual.lte = saldoMax;
+        }
     }
 
     if (filtros.sedeId) {
