@@ -13,7 +13,7 @@ exports.checkCorte = async (req, res) => {
   try {
     const { tipo } = req.query;
     if (!tipo) return res.status(400).json({ message: 'El tipo de corte es requerido' });
-    
+
     const corte = await corteCajaService.checkExistingCorte(req.user.id, tipo);
     res.json({ exists: !!corte, corte });
   } catch (error) {
@@ -36,7 +36,17 @@ exports.createCorte = async (req, res) => {
 
 exports.getAllCortes = async (req, res) => {
   try {
-    const cortes = await corteCajaService.getAllCortes();
+    const filtros = {};
+    if (req.user && req.user.rol !== 'superAdministrador' && req.user.sede) {
+      const { prisma } = require('../../config/database');
+      const sede = await prisma.sede.findFirst({
+        where: { OR: [{ id: req.user.sede }, { nombre: req.user.sede }] }
+      });
+      if (sede) filtros.sedeId = sede.id;
+      else filtros.sedeId = req.user.sede;
+    }
+
+    const cortes = await corteCajaService.getAllCortes(filtros);
     res.json(cortes);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -67,7 +77,15 @@ exports.getCorteById = async (req, res) => {
 
 exports.getCortePipas = async (req, res) => {
   try {
-    const { sedeId } = req.query;
+    let { sedeId } = req.query;
+    if (req.user && req.user.rol !== 'superAdministrador' && req.user.sede) {
+      const { prisma } = require('../../config/database');
+      const sede = await prisma.sede.findFirst({
+        where: { OR: [{ id: req.user.sede }, { nombre: req.user.sede }] }
+      });
+      if (sede) sedeId = sede.id;
+      else sedeId = req.user.sede;
+    }
     const resumen = await corteCajaService.getCorteResumenPorTipoServicio('pipas', sedeId);
     res.json(resumen);
   } catch (error) {
@@ -77,7 +95,15 @@ exports.getCortePipas = async (req, res) => {
 
 exports.getCorteCilindros = async (req, res) => {
   try {
-    const { sedeId } = req.query;
+    let { sedeId } = req.query;
+    if (req.user && req.user.rol !== 'superAdministrador' && req.user.sede) {
+      const { prisma } = require('../../config/database');
+      const sede = await prisma.sede.findFirst({
+        where: { OR: [{ id: req.user.sede }, { nombre: req.user.sede }] }
+      });
+      if (sede) sedeId = sede.id;
+      else sedeId = req.user.sede;
+    }
     const resumen = await corteCajaService.getCorteResumenPorTipoServicio('cilindros', sedeId);
     res.json(resumen);
   } catch (error) {
@@ -89,13 +115,13 @@ exports.validateCorte = async (req, res) => {
   try {
     const { id } = req.params;
     const { estado, observaciones, validaciones } = req.body;
-    
+
     const corte = await corteCajaService.validateCorte(id, {
       estado,
       observaciones,
       validaciones
     });
-    
+
     res.json(corte);
   } catch (error) {
     res.status(400).json({ message: error.message });

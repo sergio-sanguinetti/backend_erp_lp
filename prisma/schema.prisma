@@ -633,6 +633,9 @@ model CorteCajaDeposito {
 enum Rol {
   superAdministrador
   administrador
+  oficina
+  planta
+  credito_cobranza
   gestor
   repartidor
 }

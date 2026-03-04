@@ -259,8 +259,20 @@ class CorteCajaService {
     });
   }
 
-  async getAllCortes() {
+  async getAllCortes(filtros = {}) {
+    const where = {};
+    if (filtros.sedeId) {
+      const sede = await prisma.sede.findFirst({ where: { id: filtros.sedeId } });
+      where.repartidor = {
+        OR: [
+          { sede: filtros.sedeId },
+          { sede: sede ? sede.nombre : filtros.sedeId }
+        ]
+      };
+    }
+
     const cortes = await prisma.corteCaja.findMany({
+      where,
       include: {
         repartidor: true,
         depositos: true,

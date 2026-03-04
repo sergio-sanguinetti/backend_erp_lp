@@ -10,8 +10,22 @@ exports.getAllNotasCredito = async (req, res, next) => {
       clienteId: req.query.clienteId,
       estado: req.query.estado,
       fechaDesde: req.query.fechaDesde,
-      fechaHasta: req.query.fechaHasta
+      fechaHasta: req.query.fechaHasta,
+      rutaId: req.query.rutaId,
+      sedeId: req.query.sedeId
     };
+
+    if (req.user && req.user.rol !== 'superAdministrador' && req.user.sede) {
+      const { prisma } = require('../../config/database');
+      const sede = await prisma.sede.findFirst({
+        where: { OR: [{ id: req.user.sede }, { nombre: req.user.sede }] }
+      });
+      if (sede) {
+        filtros.sedeId = sede.id;
+      } else {
+        filtros.sedeId = req.user.sede;
+      }
+    }
 
     const notas = await creditoAbonoService.getAllNotasCredito(filtros);
     res.status(200).json(notas);
@@ -106,8 +120,21 @@ exports.getAllPagos = async (req, res, next) => {
       estado: req.query.estado,
       fechaDesde: req.query.fechaDesde,
       fechaHasta: req.query.fechaHasta,
-      rutaId: req.query.rutaId
+      rutaId: req.query.rutaId,
+      sedeId: req.query.sedeId
     };
+
+    if (req.user && req.user.rol !== 'superAdministrador' && req.user.sede) {
+      const { prisma } = require('../../config/database');
+      const sede = await prisma.sede.findFirst({
+        where: { OR: [{ id: req.user.sede }, { nombre: req.user.sede }] }
+      });
+      if (sede) {
+        filtros.sedeId = sede.id;
+      } else {
+        filtros.sedeId = req.user.sede;
+      }
+    }
 
     const pagos = await creditoAbonoService.getAllPagos(filtros);
     res.status(200).json(pagos);
@@ -203,8 +230,21 @@ exports.getResumenCartera = async (req, res, next) => {
       fechaDesde: req.query.fechaDesde,
       fechaHasta: req.query.fechaHasta,
       saldoMin: req.query.saldoMin != null ? Number(req.query.saldoMin) : undefined,
-      saldoMax: req.query.saldoMax != null ? Number(req.query.saldoMax) : undefined
+      saldoMax: req.query.saldoMax != null ? Number(req.query.saldoMax) : undefined,
+      sedeId: req.query.sedeId
     };
+
+    if (req.user && req.user.rol !== 'superAdministrador' && req.user.sede) {
+      const { prisma } = require('../../config/database');
+      const sede = await prisma.sede.findFirst({
+        where: { OR: [{ id: req.user.sede }, { nombre: req.user.sede }] }
+      });
+      if (sede) {
+        filtros.sedeId = sede.id;
+      } else {
+        filtros.sedeId = req.user.sede;
+      }
+    }
 
     const resumen = await creditoAbonoService.getResumenCartera(filtros);
     res.status(200).json(resumen);
@@ -225,6 +265,18 @@ exports.getClientesCredito = async (req, res, next) => {
       saldoMin: req.query.saldoMin != null ? req.query.saldoMin : undefined,
       saldoMax: req.query.saldoMax != null ? req.query.saldoMax : undefined
     };
+
+    if (req.user && req.user.rol !== 'superAdministrador' && req.user.sede) {
+      const { prisma } = require('../../config/database');
+      const sede = await prisma.sede.findFirst({
+        where: { OR: [{ id: req.user.sede }, { nombre: req.user.sede }] }
+      });
+      if (sede) {
+        filtros.sedeId = sede.id;
+      } else {
+        filtros.sedeId = req.user.sede;
+      }
+    }
 
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 10));

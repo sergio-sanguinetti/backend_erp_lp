@@ -22,7 +22,7 @@ exports.getAllPedidos = async (req, res, next) => {
     }
 
     // Si el usuario no es superAdministrador, filtrar por su sede automáticamente
-    if (req.user && req.user.rol === 'administrador' && req.user.sede && !filtros.sedeId) {
+    if (req.user && req.user.rol !== 'superAdministrador' && req.user.sede) {
       // Buscar la sede por nombre para obtener el ID
       const { prisma } = require('../../config/database');
       const sede = await prisma.sede.findFirst({
@@ -42,7 +42,7 @@ exports.getAllPedidos = async (req, res, next) => {
     console.log('Usuario:', { id: req.user?.id, rol: req.user?.rol, sede: req.user?.sede });
 
     const pedidos = await pedidoService.getAllPedidos(filtros);
-    
+
     console.log('Pedidos encontrados:', pedidos.length);
 
     res.status(200).json(pedidos);
@@ -72,7 +72,7 @@ exports.createPedido = async (req, res, next) => {
   try {
     // Obtener la sede del usuario si no se proporciona
     let sedeId = req.body.sedeId;
-    
+
     if (!sedeId && req.user && req.user.sede) {
       // Buscar la sede por nombre para obtener el ID
       const { prisma } = require('../../config/database');
@@ -93,8 +93,8 @@ exports.createPedido = async (req, res, next) => {
       }
     }
 
-    // Si aún no hay sedeId y el usuario es administrador, buscar por su sede asignada
-    if (!sedeId && req.user && req.user.rol === 'administrador' && req.user.sede) {
+    // Si aún no hay sedeId, buscar por su sede asignada
+    if (!sedeId && req.user && req.user.rol !== 'superAdministrador' && req.user.sede) {
       const { prisma } = require('../../config/database');
       // Buscar la sede por nombre (el campo sede en Usuario es string con el nombre)
       const sede = await prisma.sede.findFirst({

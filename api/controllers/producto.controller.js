@@ -10,6 +10,18 @@ exports.getAllProductos = async (req, res, next) => {
       updatedAfter: req.query.updatedAfter
     };
 
+    if (req.user && req.user.rol !== 'superAdministrador' && req.user.sede) {
+      const { prisma } = require('../../config/database');
+      const sede = await prisma.sede.findFirst({
+        where: { OR: [{ id: req.user.sede }, { nombre: req.user.sede }] }
+      });
+      if (sede) {
+        filtros.sedeId = sede.id;
+      } else {
+        filtros.sedeId = req.user.sede;
+      }
+    }
+
     const productos = await productoService.getAllProductos(filtros);
     res.status(200).json(productos);
   } catch (error) {

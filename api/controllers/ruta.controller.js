@@ -10,18 +10,30 @@ exports.getAllRutas = async (req, res, next) => {
             repartidor: req.query.repartidor,
             sedeId: req.query.sedeId
         };
-        
+
+        if (req.user && req.user.rol !== 'superAdministrador' && req.user.sede) {
+            const { prisma } = require('../../config/database');
+            const sede = await prisma.sede.findFirst({
+                where: { OR: [{ id: req.user.sede }, { nombre: req.user.sede }] }
+            });
+            if (sede) {
+                filtros.sedeId = sede.id;
+            } else {
+                filtros.sedeId = req.user.sede;
+            }
+        }
+
         console.log('getAllRutas - Query params recibidos:', req.query);
         console.log('getAllRutas - Filtros construidos:', filtros);
-        
+
         const rutas = await rutaService.getAllRutas(filtros);
-        
+
         // Formatear respuesta para incluir repartidores como array
         const rutasFormateadas = rutas.map(ruta => ({
             ...ruta,
             repartidores: ruta.repartidores.map(ur => ur.usuario)
         }));
-        
+
         res.status(200).json(rutasFormateadas);
     } catch (error) {
         next(error);
@@ -33,7 +45,7 @@ exports.getRutaById = async (req, res, next) => {
     try {
         const { id } = req.params;
         const ruta = await rutaService.findRutaById(id);
-        
+
         if (!ruta) {
             return res.status(404).json({ message: 'Ruta no encontrada.' });
         }
@@ -67,7 +79,7 @@ exports.createRuta = async (req, res, next) => {
         };
 
         const ruta = await rutaService.createRuta(rutaData);
-        
+
         // Formatear respuesta
         const rutaFormateada = {
             ...ruta,
@@ -140,7 +152,7 @@ exports.deleteRuta = async (req, res, next) => {
 
         const { id } = req.params;
         const ruta = await rutaService.deleteRuta(id);
-        
+
         if (!ruta) {
             return res.status(404).json({ message: 'Ruta no encontrada.' });
         }

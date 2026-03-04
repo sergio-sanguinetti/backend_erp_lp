@@ -105,7 +105,16 @@ exports.getAllNotasCredito = async (filtros = {}) => {
   }
 
   if (filtros.rutaId) {
-    where.cliente = { rutaId: filtros.rutaId };
+    where.cliente = { ...where.cliente, rutaId: filtros.rutaId };
+  }
+
+  if (filtros.sedeId) {
+    const rutasDeSede = await prisma.ruta.findMany({
+      where: { sedeId: filtros.sedeId },
+      select: { id: true }
+    });
+    const rutasIds = rutasDeSede.map(r => r.id);
+    where.cliente = { ...where.cliente, OR: [{ rutaId: { in: rutasIds } }, { rutaId: null }] };
   }
 
   const notas = await prisma.notaCredito.findMany({
@@ -127,10 +136,10 @@ exports.getAllNotasCredito = async (filtros = {}) => {
   return notas.map(nota => {
     if (nota.pedido) {
       if (nota.pedido.calculoPipas && typeof nota.pedido.calculoPipas === 'string') {
-        try { nota.pedido.calculoPipas = JSON.parse(nota.pedido.calculoPipas); } catch (e) {}
+        try { nota.pedido.calculoPipas = JSON.parse(nota.pedido.calculoPipas); } catch (e) { }
       }
       if (nota.pedido.formasPago && typeof nota.pedido.formasPago === 'string') {
-        try { nota.pedido.formasPago = JSON.parse(nota.pedido.formasPago); } catch (e) {}
+        try { nota.pedido.formasPago = JSON.parse(nota.pedido.formasPago); } catch (e) { }
       }
     }
     return nota;
@@ -161,10 +170,10 @@ exports.getNotaCreditoById = async (id) => {
 
   if (nota && nota.pedido) {
     if (nota.pedido.calculoPipas && typeof nota.pedido.calculoPipas === 'string') {
-      try { nota.pedido.calculoPipas = JSON.parse(nota.pedido.calculoPipas); } catch (e) {}
+      try { nota.pedido.calculoPipas = JSON.parse(nota.pedido.calculoPipas); } catch (e) { }
     }
     if (nota.pedido.formasPago && typeof nota.pedido.formasPago === 'string') {
-      try { nota.pedido.formasPago = JSON.parse(nota.pedido.formasPago); } catch (e) {}
+      try { nota.pedido.formasPago = JSON.parse(nota.pedido.formasPago); } catch (e) { }
     }
   }
 
@@ -380,12 +389,12 @@ exports.createPago = async (pagoData) => {
     const formasPagoToStore =
       formasPagoArray.length > 0 || hasDiscount
         ? {
-            items: formasPagoArray,
-            descuento: pagoData.descuento ?? null,
-            descuentoMonto: pagoData.descuentoMonto != null ? Number(pagoData.descuentoMonto) : null,
-            discountType: pagoData.discountType || null,
-            discountName: pagoData.discountName || null
-          }
+          items: formasPagoArray,
+          descuento: pagoData.descuento ?? null,
+          descuentoMonto: pagoData.descuentoMonto != null ? Number(pagoData.descuentoMonto) : null,
+          discountType: pagoData.discountType || null,
+          discountName: pagoData.discountName || null
+        }
         : null;
     return await prisma.pedido.update({
       where: { id: pagoData.pedidoId },
@@ -410,71 +419,71 @@ exports.createPago = async (pagoData) => {
     throw new Error('El cliente no tiene saldo pendiente para abonar. No se puede registrar el abono.');
   }
 
-    const formasPagoAbono = (pagoData.formasPago || []).map(fp => {
-      const montoFp = (fp.monto != null && fp.monto !== '') ? parseFloat(fp.monto) : null;
-      return {
-        formaPagoId: fp.formaPagoId,
-        monto: montoFp != null && !isNaN(montoFp) ? montoFp : montoAbono / Math.max(1, (pagoData.formasPago || []).length),
-        referencia: fp.referencia || null,
-        banco: fp.banco || null
-      };
-    });
+  const formasPagoAbono = (pagoData.formasPago || []).map(fp => {
+    const montoFp = (fp.monto != null && fp.monto !== '') ? parseFloat(fp.monto) : null;
+    return {
+      formaPagoId: fp.formaPagoId,
+      monto: montoFp != null && !isNaN(montoFp) ? montoFp : montoAbono / Math.max(1, (pagoData.formasPago || []).length),
+      referencia: fp.referencia || null,
+      banco: fp.banco || null
+    };
+  });
 
-    const nuevoPago = await prisma.pago.create({
-      data: {
-        clienteId: pagoData.clienteId,
-        notaCreditoId: pagoData.notaCreditoId || null,
-        montoTotal: montoAbono,
-        tipo: pagoData.tipo,
-        fechaPago: new Date(pagoData.fechaPago),
-        horaPago: pagoData.horaPago,
-        observaciones: pagoData.observaciones || null,
-        usuarioRegistro: pagoData.usuarioRegistro,
-        usuarioAutorizacion: pagoData.usuarioAutorizacion || null,
-        estado: pagoData.estado || 'pendiente',
-        formasPago: {
-          create: formasPagoAbono
+  const nuevoPago = await prisma.pago.create({
+    data: {
+      clienteId: pagoData.clienteId,
+      notaCreditoId: pagoData.notaCreditoId || null,
+      montoTotal: montoAbono,
+      tipo: pagoData.tipo,
+      fechaPago: new Date(pagoData.fechaPago),
+      horaPago: pagoData.horaPago,
+      observaciones: pagoData.observaciones || null,
+      usuarioRegistro: pagoData.usuarioRegistro,
+      usuarioAutorizacion: pagoData.usuarioAutorizacion || null,
+      estado: pagoData.estado || 'pendiente',
+      formasPago: {
+        create: formasPagoAbono
+      }
+    },
+    include: {
+      cliente: {
+        include: {
+          ruta: true
         }
       },
-      include: {
-        cliente: {
-          include: {
-            ruta: true
-          }
-        },
-        notaCredito: true,
-        formasPago: {
-          include: {
-            formaPago: true
-          }
-        }
-      }
-    });
-
-    // REGISTRAR EN LA TABLA abonos_cliente: una fila por forma de pago con su monto (no el total del abono)
-    if (formasPagoAbono && formasPagoAbono.length > 0) {
-      console.log('--- REGISTRANDO EN abonos_cliente ---');
-      for (const fp of formasPagoAbono) {
-        try {
-          await prisma.abonoCliente.create({
-            data: {
-              clienteId: pagoData.clienteId,
-              monto: fp.monto,
-              fecha: new Date(pagoData.fechaPago),
-              formaPagoId: fp.formaPagoId,
-              folio: fp.referencia || null,
-              notaCreditoId: pagoData.notaCreditoId || null,
-              usuarioRegistro: pagoData.usuarioRegistro || 'APP_USER',
-              observaciones: pagoData.observaciones || null
-            }
-          });
-          console.log('Abono registrado en abonos_cliente para fp:', fp.formaPagoId, 'monto:', fp.monto);
-        } catch (error) {
-          console.error('ERROR al registrar en abonos_cliente:', error);
-          throw new Error('El abono se creó pero falló el registro en abonos_cliente. Verifique la base de datos.');
+      notaCredito: true,
+      formasPago: {
+        include: {
+          formaPago: true
         }
       }
     }
+  });
+
+  // REGISTRAR EN LA TABLA abonos_cliente: una fila por forma de pago con su monto (no el total del abono)
+  if (formasPagoAbono && formasPagoAbono.length > 0) {
+    console.log('--- REGISTRANDO EN abonos_cliente ---');
+    for (const fp of formasPagoAbono) {
+      try {
+        await prisma.abonoCliente.create({
+          data: {
+            clienteId: pagoData.clienteId,
+            monto: fp.monto,
+            fecha: new Date(pagoData.fechaPago),
+            formaPagoId: fp.formaPagoId,
+            folio: fp.referencia || null,
+            notaCreditoId: pagoData.notaCreditoId || null,
+            usuarioRegistro: pagoData.usuarioRegistro || 'APP_USER',
+            observaciones: pagoData.observaciones || null
+          }
+        });
+        console.log('Abono registrado en abonos_cliente para fp:', fp.formaPagoId, 'monto:', fp.monto);
+      } catch (error) {
+        console.error('ERROR al registrar en abonos_cliente:', error);
+        throw new Error('El abono se creó pero falló el registro en abonos_cliente. Verifique la base de datos.');
+      }
+    }
+  }
 
   // RESTAR DE LA DEUDA INMEDIATAMENTE (al crear el abono). Nunca dejar saldo negativo.
   const nuevoSaldoCliente = Math.max(0, saldoActualCliente - montoAbono);
@@ -601,7 +610,16 @@ exports.getAllPagos = async (filtros = {}) => {
   }
 
   if (filtros.rutaId) {
-    where.cliente = { rutaId: filtros.rutaId };
+    where.cliente = { ...where.cliente, rutaId: filtros.rutaId };
+  }
+
+  if (filtros.sedeId) {
+    const rutasDeSede = await prisma.ruta.findMany({
+      where: { sedeId: filtros.sedeId },
+      select: { id: true }
+    });
+    const rutasIds = rutasDeSede.map(r => r.id);
+    where.cliente = { ...where.cliente, OR: [{ rutaId: { in: rutasIds } }, { rutaId: null }] };
   }
 
   const pagos = await prisma.pago.findMany({
@@ -632,7 +650,13 @@ exports.getAllPagos = async (filtros = {}) => {
         fecha: { gte: rangeStart, lte: rangeEnd }
       };
       if (filtros.clienteId) whereAbono.clienteId = filtros.clienteId;
-      if (filtros.rutaId) whereAbono.cliente = { rutaId: filtros.rutaId };
+      if (filtros.rutaId) whereAbono.cliente = { ...whereAbono.cliente, rutaId: filtros.rutaId };
+
+      if (filtros.sedeId) {
+        const rutasDeSede = await prisma.ruta.findMany({ where: { sedeId: filtros.sedeId }, select: { id: true } });
+        const rutasIds = rutasDeSede.map(r => r.id);
+        whereAbono.cliente = { ...whereAbono.cliente, OR: [{ rutaId: { in: rutasIds } }, { rutaId: null }] };
+      }
 
       const abonos = await prisma.abonoCliente.findMany({
         where: whereAbono,
@@ -841,8 +865,17 @@ exports.getResumenCartera = async (filtros = {}) => {
     if (saldoMin != null) clienteWhere.saldoActual.gte = saldoMin;
     if (saldoMax != null) clienteWhere.saldoActual.lte = saldoMax;
   }
+  if (filtros.sedeId) {
+    const rutasDeSede = await prisma.ruta.findMany({
+      where: { sedeId: filtros.sedeId },
+      select: { id: true }
+    });
+    const rutasIds = rutasDeSede.map(r => r.id);
+    clienteWhere.OR = [{ rutaId: { in: rutasIds } }, { rutaId: null }];
+  }
+
   if (Object.keys(clienteWhere).length > 0) {
-    where.cliente = clienteWhere;
+    where.cliente = { ...where.cliente, ...clienteWhere };
   }
 
   const notas = await prisma.notaCredito.findMany({

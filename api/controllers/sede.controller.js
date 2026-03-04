@@ -3,6 +3,13 @@ const sedeService = require('../../services/sede.service');
 // Obtener todas las sedes
 exports.getAllSedes = async (req, res, next) => {
     try {
+        if (req.user && req.user.rol !== 'superAdministrador' && req.user.sede) {
+            const { prisma } = require('../../config/database');
+            const sede = await prisma.sede.findFirst({
+                where: { OR: [{ id: req.user.sede }, { nombre: req.user.sede }] }
+            });
+            if (sede) return res.status(200).json([sede]);
+        }
         const sedes = await sedeService.getAllSedes();
         res.status(200).json(sedes);
     } catch (error) {
@@ -15,7 +22,7 @@ exports.getSedeById = async (req, res, next) => {
     try {
         const { id } = req.params;
         const sede = await sedeService.findSedeById(id);
-        
+
         if (!sede) {
             return res.status(404).json({ message: 'Sede no encontrada.' });
         }
@@ -83,7 +90,7 @@ exports.deleteSede = async (req, res, next) => {
 
         const { id } = req.params;
         const sede = await sedeService.deleteSede(id);
-        
+
         if (!sede) {
             return res.status(404).json({ message: 'Sede no encontrada.' });
         }

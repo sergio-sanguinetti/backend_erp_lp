@@ -187,7 +187,7 @@ exports.verifyAndEnable2FA = async (req, res, next) => {
     try {
         // Obtener el usuario actualizado de la base de datos para verificar el secreto
         const usuario = await usuarioService.findUsuarioById(userId);
-        
+
         if (!usuario) {
             return res.status(404).json({ message: 'Usuario no encontrado.' });
         }
@@ -250,7 +250,7 @@ exports.getProfile = async (req, res, next) => {
         const profileData = { ...usuario };
         delete profileData.password;
         delete profileData.twoFactorSecret;
-        
+
         res.status(200).json(profileData);
     } catch (error) {
         next(error);
@@ -272,7 +272,7 @@ exports.getAllUsuarios = async (req, res, next) => {
         if (req.query.sede) filtros.sede = req.query.sede;
 
         // Si el usuario no es superAdministrador, filtrar por su sede automáticamente
-        if (req.user.rol === 'administrador' && req.user.sede && !filtros.sede) {
+        if (req.user.rol !== 'superAdministrador' && req.user.sede) {
             filtros.sede = req.user.sede;
         }
 

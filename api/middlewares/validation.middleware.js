@@ -17,7 +17,7 @@ exports.validateRegistration = [
         .isLength({ min: 6 }).withMessage('La contraseña debe tener al menos 6 caracteres.'),
     body('rol')
         .optional()
-        .isIn(['superAdministrador', 'administrador', 'gestor', 'repartidor'])
+        .isIn(['superAdministrador', 'administrador', 'oficina', 'planta', 'credito_cobranza', 'repartidor', 'gestor'])
         .withMessage('El rol no es válido.'),
     body('estado')
         .optional()
