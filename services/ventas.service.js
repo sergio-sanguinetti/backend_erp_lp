@@ -4,19 +4,44 @@ const { getTodayBoundsMexico } = require('../utils/timezoneMexico');
 
 const FACTOR_KG_A_LITROS = 0.51854;
 
-async function getResumenDia(sedeId) {
-  const { start: todayStart, end: todayEnd, dateStr } = getTodayBoundsMexico();
+async function getResumenDia(sedeId, fechaDesde, fechaHasta) {
+  const { getTodayBoundsMexico, getMexicoCityDayBounds } = require('../utils/timezoneMexico');
 
-  const prefixHoy = "PED-" + dateStr.replace(/-/g, "") + "-";
-  const midnightUTC = new Date(dateStr + "T00:00:00.000Z");
-  const wherePedidos = {
-    OR: [
-      { fechaPedido: { gte: todayStart, lte: todayEnd } },
-      { fechaPedido: midnightUTC, numeroPedido: { startsWith: prefixHoy } }
-    ]
-  };
+  let wherePedidos;
+
+  if (fechaDesde || fechaHasta) {
+    // Custom date range
+    wherePedidos = {};
+    if (fechaDesde && fechaHasta) {
+      const startBounds = getMexicoCityDayBounds(fechaDesde);
+      const endBounds = getMexicoCityDayBounds(fechaHasta);
+      wherePedidos.fechaPedido = { gte: startBounds.start, lte: endBounds.end };
+    } else if (fechaDesde) {
+      const startBounds = getMexicoCityDayBounds(fechaDesde);
+      wherePedidos.fechaPedido = { gte: startBounds.start };
+    } else {
+      const endBounds = getMexicoCityDayBounds(fechaHasta);
+      wherePedidos.fechaPedido = { lte: endBounds.end };
+    }
+  } else {
+    // Today only (original logic with offline fix)
+    const { start: todayStart, end: todayEnd, dateStr } = getTodayBoundsMexico();
+    const prefixHoy = "PED-" + dateStr.replace(/-/g, "") + "-";
+    const midnightUTC = new Date(dateStr + "T00:00:00.000Z");
+    wherePedidos = {
+      OR: [
+        { fechaPedido: { gte: todayStart, lte: todayEnd } },
+        { fechaPedido: midnightUTC, numeroPedido: { startsWith: prefixHoy } }
+      ]
+    };
+  }
+
   if (sedeId) {
-    wherePedidos.OR = wherePedidos.OR.map(w => ({ ...w, sedeId }));
+    if (wherePedidos.OR) {
+      wherePedidos.OR = wherePedidos.OR.map(w => ({ ...w, sedeId }));
+    } else {
+      wherePedidos.sedeId = sedeId;
+    }
   }
 
   const pedidosHoy = await prisma.pedido.findMany({
@@ -128,22 +153,40 @@ async function getResumenDia(sedeId) {
 
 
 
-async function getResumenPorRepartidor(sedeId) {
-  const { getTodayBoundsMexico } = require('../utils/timezoneMexico');
+async function getResumenPorRepartidor(sedeId, fechaDesde, fechaHasta) {
+  const { getTodayBoundsMexico, getMexicoCityDayBounds } = require('../utils/timezoneMexico');
   const { prisma } = require('../config/database');
-  const { start: todayStart, end: todayEnd, dateStr } = getTodayBoundsMexico();
 
-  const prefixHoy = "PED-" + dateStr.replace(/-/g, "") + "-";
-  const midnightUTC = new Date(dateStr + "T00:00:00.000Z");
   const baseWhere = { estado: "entregado", repartidorId: { not: null } };
   if (sedeId) baseWhere.sedeId = sedeId;
-  const wherePedidos = {
-    ...baseWhere,
-    OR: [
-      { fechaPedido: { gte: todayStart, lte: todayEnd } },
-      { fechaPedido: midnightUTC, numeroPedido: { startsWith: prefixHoy } }
-    ]
-  };
+
+  let wherePedidos;
+
+  if (fechaDesde || fechaHasta) {
+    wherePedidos = { ...baseWhere };
+    if (fechaDesde && fechaHasta) {
+      const startBounds = getMexicoCityDayBounds(fechaDesde);
+      const endBounds = getMexicoCityDayBounds(fechaHasta);
+      wherePedidos.fechaPedido = { gte: startBounds.start, lte: endBounds.end };
+    } else if (fechaDesde) {
+      const startBounds = getMexicoCityDayBounds(fechaDesde);
+      wherePedidos.fechaPedido = { gte: startBounds.start };
+    } else {
+      const endBounds = getMexicoCityDayBounds(fechaHasta);
+      wherePedidos.fechaPedido = { lte: endBounds.end };
+    }
+  } else {
+    const { start: todayStart, end: todayEnd, dateStr } = getTodayBoundsMexico();
+    const prefixHoy = "PED-" + dateStr.replace(/-/g, "") + "-";
+    const midnightUTC = new Date(dateStr + "T00:00:00.000Z");
+    wherePedidos = {
+      ...baseWhere,
+      OR: [
+        { fechaPedido: { gte: todayStart, lte: todayEnd } },
+        { fechaPedido: midnightUTC, numeroPedido: { startsWith: prefixHoy } }
+      ]
+    };
+  }
 
   const pedidos = await prisma.pedido.findMany({
     where: wherePedidos,
