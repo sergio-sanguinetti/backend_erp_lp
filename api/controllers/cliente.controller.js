@@ -380,14 +380,17 @@ exports.getHistorialCliente = async (req, res, next) => {
         const pedidos = await prisma.pedido.findMany({
             where: { clienteId: id, estado: 'entregado' },
             orderBy: { fechaPedido: 'desc' },
-            take: 8,
+            take: 50,
             select: {
                 id: true,
+                numeroPedido: true,
                 fechaPedido: true,
                 horaPedido: true,
                 ventaTotal: true,
                 tipoServicio: true,
                 calculoPipas: true,
+                ruta: { select: { nombre: true } },
+                repartidor: { select: { nombres: true, apellidoPaterno: true } },
                 productosPedido: {
                     select: {
                         cantidad: true,
@@ -397,61 +400,18 @@ exports.getHistorialCliente = async (req, res, next) => {
             }
         });
 
-        // Estadísticas globales del cliente
-        const todosPedidos = await prisma.pedido.findMany({
-            where: { clienteId: id, estado: 'entregado' },
-            select: { ventaTotal: true, fechaPedido: true }
-        });
+        const totalHistorico = pedidos.reduce((s, p) => s + (parseFloat(p.ventaTotal) || 0), 0);
+        const ticketPromedio = pedidos.length > 0 ? Math.round(totalHistorico / pedidos.length) : 0;
 
-        const totalHistorico = todosPedidos.reduce((s, p) => s + (parseFloat(p.ventaTotal) || 0), 0);
-        const ticketProm = todosPedidos.length > 0 ? Math.round(totalHistorico / todosPedidos.length) : 0;
-
-        // Frecuencia en días
-        let frecuenciaDias = 0;
-        if (todosPedidos.length >= 2) {
-            const fechas = todosPedidos.map(p => new Date(p.fechaPedido).getTime()).sort((a, b) => a - b);
-            const diffMs = fechas[fechas.length - 1] - fechas[0];
-            frecuenciaDias = Math.round((diffMs / (1000 * 60 * 60 * 24)) / (todosPedidos.length - 1) * 10) / 10;
+        let frecuenciaDias = null;
+        if (pedidos.length >= 2) {
+            const fechas = pedidos.map(p => new Date(p.fechaPedido)).sort((a, b) => a - b);
+            let totalDias = 0;
+            for (let i = 1; i < fechas.length; i++) totalDias += (fechas[i] - fechas[i - 1]) / 86400000;
+            frecuenciaDias = (totalDias / (fechas.length - 1)).toFixed(1);
         }
 
-        // Formatear últimas visitas
-        const visitas = pedidos.map(p => {
-            let detalle = p.tipoServicio;
-            if (p.tipoServicio === 'pipas' && p.calculoPipas) {
-                try {
-                    const calc = typeof p.calculoPipas === 'string' ? JSON.parse(p.calculoPipas) : p.calculoPipas;
-                    let litros = 0;
-                    if (Array.isArray(calc)) {
-                        litros = calc.reduce((s, c) => s + (parseFloat(c.cantidadLitros) || 0), 0);
-                    } else if (calc?.cantidadLitros) {
-                        litros = parseFloat(calc.cantidadLitros) || 0;
-                    }
-                    detalle = `${litros.toFixed(1)} L`;
-                } catch (e) { /* ignore */ }
-            } else if (p.tipoServicio === 'cilindros' && p.productosPedido) {
-                const piezas = p.productosPedido.reduce((s, pp) => s + (pp.cantidad || 0), 0);
-                detalle = `${piezas} pzas`;
-            }
-            return {
-                fecha: p.fechaPedido,
-                hora: p.horaPedido,
-                tipo: p.tipoServicio,
-                detalle,
-                total: parseFloat(p.ventaTotal) || 0
-            };
-        });
-
-        const nombreCompleto = [cliente.nombre, cliente.apellidoPaterno, cliente.apellidoMaterno]
-            .filter(Boolean).join(' ').trim();
-
-        res.status(200).json({
-            nombre: nombreCompleto,
-            totalHistorico: Math.round(totalHistorico * 100) / 100,
-            ticketPromedio: ticketProm,
-            frecuenciaDias,
-            totalVisitas: todosPedidos.length,
-            visitas
-        });
+        res.json({ totalHistorico, ticketPromedio, frecuenciaDias, totalVisitas: pedidos.length, pedidos });
     } catch (error) {
         console.error('Error getHistorialCliente:', error);
         next(error);
