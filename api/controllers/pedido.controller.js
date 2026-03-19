@@ -176,3 +176,73 @@ exports.deletePedido = async (req, res, next) => {
   }
 };
 
+
+// Modificar pagos de un pedido (Oficina, Planta, Administrador)
+exports.updatePagosPedido = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { pagos } = req.body; // Array de pagos: [{ metodoId, monto, folio, tipo }]
+    const rol = req.user?.rol;
+
+    const rolesPermitidos = ['superAdministrador', 'administrador', 'oficina', 'planta'];
+    if (!rolesPermitidos.includes(rol)) {
+      return res.status(403).json({ message: 'No tienes permiso para modificar pagos' });
+    }
+
+    if (!pagos || !Array.isArray(pagos) || pagos.length === 0) {
+      return res.status(400).json({ message: 'Se requiere al menos una forma de pago' });
+    }
+
+    const { prisma } = require('../../config/database');
+
+    // Verificar que el pedido existe
+    const pedido = await prisma.pedido.findUnique({ where: { id } });
+    if (!pedido) {
+      return res.status(404).json({ message: 'Pedido no encontrado' });
+    }
+
+    // Eliminar pagos anteriores del pedido
+    await prisma.pagoPedido.deleteMany({ where: { pedidoId: id } });
+
+    // Crear los nuevos pagos
+    const nuevosPagos = await Promise.all(pagos.map(pago =>
+      prisma.pagoPedido.create({
+        data: {
+          pedidoId: id,
+          metodoId: pago.metodoId || null,
+          monto: parseFloat(pago.monto) || 0,
+          folio: pago.folio || null,
+          tipo: pago.tipo || 'metodo_pago',
+        }
+      })
+    ));
+
+    res.json({ message: 'Pagos actualizados correctamente', pagos: nuevosPagos });
+  } catch (error) {
+    console.error('Error updatePagosPedido:', error);
+    res.status(500).json({ message: error.message || 'Error al actualizar pagos' });
+  }
+};
+
+// Cancelar pedido (Oficina, Planta)
+exports.cancelarPedido = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const rol = req.user?.rol;
+
+    const rolesPermitidos = ['superAdministrador', 'administrador', 'oficina', 'planta'];
+    if (!rolesPermitidos.includes(rol)) {
+      return res.status(403).json({ message: 'No tienes permiso para cancelar pedidos' });
+    }
+
+    const { prisma } = require('../../config/database');
+    const pedido = await prisma.pedido.update({
+      where: { id },
+      data: { estado: 'cancelado' }
+    });
+
+    res.json({ message: 'Pedido cancelado', pedido });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

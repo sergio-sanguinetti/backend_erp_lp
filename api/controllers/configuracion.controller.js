@@ -14,7 +14,7 @@ exports.getConfiguracion = async (req, res, next) => {
 exports.updateConfiguracion = async (req, res, next) => {
   try {
     // Verificar permisos - solo administradores pueden actualizar configuraciones
-    if (req.user && req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
+    if (req.user && req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador' && req.user.rol !== 'oficina' && req.user.rol !== 'planta') {
       return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden actualizar configuraciones.' });
     }
 

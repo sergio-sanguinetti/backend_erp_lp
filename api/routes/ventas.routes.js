@@ -6,4 +6,5 @@ router.get('/resumen', ventasController.getResumen);
 router.get('/corte/pipas', ventasController.getCortePipas);
 router.get('/corte/cilindros', ventasController.getCorteCilindros);
 
+router.get('/resumen-repartidores', ventasController.getResumenPorRepartidor);
 module.exports = router;

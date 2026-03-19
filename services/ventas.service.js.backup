@@ -1,0 +1,120 @@
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+const { getTodayBoundsMexico } = require('../utils/timezoneMexico');
+
+const FACTOR_KG_A_LITROS = 0.51854;
+
+async function getResumenDia(sedeId) {
+  const { start: todayStart, end: todayEnd } = getTodayBoundsMexico();
+
+  const wherePedidos = {
+    fechaPedido: { gte: todayStart, lte: todayEnd }
+  };
+  if (sedeId) {
+    wherePedidos.sedeId = sedeId;
+  }
+
+  const pedidosHoy = await prisma.pedido.findMany({
+    where: wherePedidos,
+    select: {
+      id: true,
+      estado: true,
+      ventaTotal: true,
+      tipoServicio: true,
+      calculoPipas: true,
+      productosPedido: {
+        select: {
+          cantidad: true,
+          producto: {
+            select: {
+              cantidadKilos: true
+            }
+          }
+        }
+      },
+      pagos: {
+        select: {
+          monto: true,
+          tipo: true,
+          metodo: { select: { tipo: true } }
+        }
+      }
+    }
+  });
+
+  const pedidosCreados = pedidosHoy.length;
+  const pedidosEntregados = pedidosHoy.filter(p => p.estado === 'entregado').length;
+
+  const ventasHoy = pedidosHoy
+    .filter(p => p.estado === 'entregado')
+    .reduce((sum, p) => sum + (parseFloat(p.ventaTotal) || 0), 0);
+
+  const ventasPipas = pedidosHoy
+    .filter(p => p.estado === 'entregado' && p.tipoServicio === 'pipas')
+    .reduce((sum, p) => sum + (parseFloat(p.ventaTotal) || 0), 0);
+
+  const ventasCilindros = pedidosHoy
+    .filter(p => p.estado === 'entregado' && p.tipoServicio === 'cilindros')
+    .reduce((sum, p) => sum + (parseFloat(p.ventaTotal) || 0), 0);
+
+  const efectivoHoy = pedidosHoy
+    .filter(p => p.estado === 'entregado')
+    .reduce((sum, p) => {
+      const ef = (p.pagos || [])
+        .filter(pago => pago.metodo?.tipo === 'efectivo')
+        .reduce((s, pago) => s + (parseFloat(pago.monto) || 0), 0);
+      return sum + ef;
+    }, 0);
+
+  const creditoHoy = pedidosHoy
+    .filter(p => p.estado === 'entregado')
+    .reduce((sum, p) => {
+      const cr = (p.pagos || [])
+        .filter(pago => pago.tipo === 'credito')
+        .reduce((s, pago) => s + (parseFloat(pago.monto) || 0), 0);
+      return sum + cr;
+    }, 0);
+
+  const litrosPipas = pedidosHoy
+    .filter(p => p.estado === 'entregado' && p.tipoServicio === 'pipas')
+    .reduce((sum, p) => {
+      try {
+        const calc = typeof p.calculoPipas === 'string' ? JSON.parse(p.calculoPipas) : p.calculoPipas;
+        return sum + (parseFloat(calc?.cantidadLitros) || 0);
+      } catch {
+        return sum;
+      }
+    }, 0);
+
+  const kgCilindros = pedidosHoy
+    .filter(p => p.estado === 'entregado' && p.tipoServicio === 'cilindros')
+    .reduce((sum, p) => {
+      const kg = (p.productosPedido || []).reduce((s, pp) => {
+        const kilos = parseFloat(pp.producto?.cantidadKilos) || 0;
+        const cantidad = parseFloat(pp.cantidad) || 0;
+        return s + (kilos * cantidad);
+      }, 0);
+      return sum + kg;
+    }, 0);
+
+  const litrosCilindros = kgCilindros / FACTOR_KG_A_LITROS;
+  const litrosTotales = litrosPipas + litrosCilindros;
+
+  return {
+    ventasHoy,
+    crecimientoPorcentaje: 0,
+    pedidosCreados,
+    pedidosEntregados,
+    alertasCriticas: 0,
+    efectivoConsolidado: efectivoHoy,
+    efectivoHoy,
+    creditoHoy: Math.round(creditoHoy * 100) / 100,
+    ventasPipas: Math.round(ventasPipas * 100) / 100,
+    ventasCilindros: Math.round(ventasCilindros * 100) / 100,
+    litrosPipas: Math.round(litrosPipas * 100) / 100,
+    litrosCilindros: Math.round(litrosCilindros * 100) / 100,
+    litrosTotales: Math.round(litrosTotales * 100) / 100
+  };
+}
+
+module.exports = { getResumenDia };

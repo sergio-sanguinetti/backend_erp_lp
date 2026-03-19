@@ -12,5 +12,7 @@ router.post('/', protect, pedidoController.createPedido);
 router.put('/:id', protect, pedidoController.updatePedido);
 router.delete('/:id', protect, pedidoController.deletePedido);
 
+router.put('/:id/pagos', protect, pedidoController.updatePagosPedido);
+router.put('/:id/cancelar', protect, pedidoController.cancelarPedido);
 module.exports = router;
 

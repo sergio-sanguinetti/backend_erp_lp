@@ -14,3 +14,14 @@ exports.getResumen = async (req, res) => {
 
 exports.getCortePipas = corteCajaController.getCortePipas;
 exports.getCorteCilindros = corteCajaController.getCorteCilindros;
+
+exports.getResumenPorRepartidor = async (req, res) => {
+  try {
+    const { sedeId } = req.query;
+    const data = await ventasService.getResumenPorRepartidor(sedeId || null);
+    res.json(data);
+  } catch (error) {
+    console.error('Error en getResumenPorRepartidor:', error);
+    res.status(500).json({ message: error.message || 'Error al obtener resumen por repartidor' });
+  }
+};

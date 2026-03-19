@@ -35,6 +35,8 @@ router.get('/by-rutas', clienteController.getClientesByRutasPaginated);
 router.get('/buscar-por-qr', clienteController.buscarPorQR);
 router.get('/ranking', protect, clienteController.getRanking);
 router.get('/', clienteController.getAllClientes);
+router.get('/ranking', protect, clienteController.getRanking);
+router.get('/:id/historial', protect, clienteController.getHistorialCliente);
 router.get('/:id', clienteController.getClienteById);
 router.get('/:id/historial', protect, clienteController.getHistorialCliente);
 router.post('/', protect, clienteController.createCliente);

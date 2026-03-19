@@ -261,7 +261,7 @@ exports.getProfile = async (req, res, next) => {
 exports.getAllUsuarios = async (req, res, next) => {
     try {
         // Verificar que el usuario sea administrador o superAdministrador
-        if (req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
+        if (req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador' && req.user.rol !== 'oficina' && req.user.rol !== 'planta') {
             return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden ver esta información.' });
         }
 

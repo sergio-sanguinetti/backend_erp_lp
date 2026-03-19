@@ -73,8 +73,7 @@ exports.createProducto = async (req, res, next) => {
 // Actualizar producto
 exports.updateProducto = async (req, res, next) => {
   try {
-    // Verificar permisos - solo administradores pueden actualizar productos
-    if (req.user && req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador') {
+    if (req.user && req.user.rol !== 'administrador' && req.user.rol !== 'superAdministrador' && req.user.rol !== 'oficina' && req.user.rol !== 'planta') {
       return res.status(403).json({ message: 'Acceso denegado. Solo administradores pueden modificar productos.' });
     }
 
