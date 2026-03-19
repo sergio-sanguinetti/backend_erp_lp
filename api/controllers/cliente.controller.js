@@ -264,7 +264,7 @@ exports.getRanking = async (req, res, next) => {
                     select: { nombre: true }
                 },
                 repartidor: {
-                    select: { nombre: true }
+                    select: { nombres: true }
                 }
             }
         });
@@ -283,7 +283,7 @@ exports.getRanking = async (req, res, next) => {
                     id: cId,
                     nombre: nombreCompleto || 'Sin nombre',
                     ruta: pedido.ruta?.nombre || '',
-                    operador: pedido.repartidor?.nombre || '',
+                    operador: pedido.repartidor?.nombres || '',
                     visitas: 0,
                     total: 0,
                     litros: 0,
@@ -302,8 +302,8 @@ exports.getRanking = async (req, res, next) => {
             // Actualizar ruta con la más reciente
             if (pedido.ruta?.nombre) {
                 c.ruta = pedido.ruta.nombre;
-                if (pedido.repartidor?.nombre) {
-                    c.ruta += ' ' + pedido.repartidor.nombre.split(' ')[0].toUpperCase();
+                if (pedido.repartidor?.nombres) {
+                    c.ruta += ' ' + pedido.repartidor.nombres.split(' ')[0].toUpperCase();
                 }
             }
 
