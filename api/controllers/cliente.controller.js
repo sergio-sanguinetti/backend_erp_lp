@@ -209,18 +209,17 @@ exports.deleteDomicilio = async (req, res, next) => {
 exports.getRanking = async (req, res, next) => {
     try {
         const { tipoServicio, fechaDesde, fechaHasta, sedeId: querySedeId } = req.query;
+        const { prisma } = require('../../config/database');
+        const { getMexicoCityDayBounds } = require('../../utils/timezoneMexico');
 
         // Determinar sedeId (por query o por usuario)
         let sedeId = querySedeId;
         if (!sedeId && req.user && req.user.rol !== 'superAdministrador' && req.user.sede) {
-            const { prisma } = require('../../config/database');
             const sede = await prisma.sede.findFirst({
                 where: { OR: [{ id: req.user.sede }, { nombre: req.user.sede }] }
             });
             sedeId = sede ? sede.id : req.user.sede;
         }
-
-        const { prisma } = require('../../config/database');
 
         // Construir filtro de pedidos
         const where = { estado: 'entregado' };
@@ -230,8 +229,8 @@ exports.getRanking = async (req, res, next) => {
         if (sedeId) where.sedeId = sedeId;
         if (fechaDesde || fechaHasta) {
             where.fechaPedido = {};
-            if (fechaDesde) where.fechaPedido.gte = new Date(fechaDesde + 'T00:00:00Z');
-            if (fechaHasta) where.fechaPedido.lte = new Date(fechaHasta + 'T23:59:59Z');
+            if (fechaDesde) where.fechaPedido.gte = getMexicoCityDayBounds(fechaDesde).start;
+            if (fechaHasta) where.fechaPedido.lte = getMexicoCityDayBounds(fechaHasta).end;
         }
 
         // Obtener todos los pedidos entregados con sus productos
@@ -487,116 +486,4 @@ exports.importarClientesMasivo = async (req, res, next) => {
         next(error);
     }
 };
-exports.getRanking = async (req, res) => {
-  try {
-    const { fechaDesde, fechaHasta, sedeId: sedeQuery, tipoServicio } = req.query;
-    const { prisma } = require('../../config/database');
-    const { getMexicoCityDayBounds } = require('../../utils/timezoneMexico');
 
-    const whereBase = { estado: 'entregado' };
-    if (req.user && req.user.rol !== 'superAdministrador' && req.user.sede) {
-      const sede = await prisma.sede.findFirst({ where: { OR: [{ id: req.user.sede }, { nombre: req.user.sede }] } });
-      if (sede) whereBase.sedeId = sede.id;
-    } else if (sedeQuery) whereBase.sedeId = sedeQuery;
-    if (tipoServicio) whereBase.tipoServicio = tipoServicio;
-    if (fechaDesde || fechaHasta) {
-      whereBase.fechaPedido = {};
-      if (fechaDesde) whereBase.fechaPedido.gte = getMexicoCityDayBounds(fechaDesde).start;
-      if (fechaHasta) whereBase.fechaPedido.lte = getMexicoCityDayBounds(fechaHasta).end;
-    }
-
-    const pedidos = await prisma.pedido.findMany({
-      where: whereBase,
-      select: {
-        ventaTotal: true, tipoServicio: true, fechaPedido: true, calculoPipas: true,
-        cliente: { select: { id: true, nombre: true, apellidoPaterno: true, apellidoMaterno: true } },
-        ruta: { select: { nombre: true } },
-        productosPedido: { select: { cantidad: true, producto: { select: { cantidadKilos: true, categoria: { select: { codigo: true } } } } } }
-      }
-    });
-
-    const mapa = {};
-    for (const p of pedidos) {
-      if (!p.cliente) continue;
-      const cid = p.cliente.id;
-      if (!mapa[cid]) mapa[cid] = {
-        id: cid,
-        nombre: `${p.cliente.nombre} ${p.cliente.apellidoPaterno || ''} ${p.cliente.apellidoMaterno || ''}`.trim(),
-        ruta: p.ruta?.nombre || 'Sin ruta',
-        tipoServicio: p.tipoServicio,
-        totalCompras: 0, visitas: 0, ultimaVisita: p.fechaPedido,
-        litros: 0, cil10: 0, cil20: 0, cil30: 0
-      };
-      const c = mapa[cid];
-      c.totalCompras += parseFloat(p.ventaTotal) || 0;
-      c.visitas += 1;
-      if (p.fechaPedido > c.ultimaVisita) c.ultimaVisita = p.fechaPedido;
-      if (p.tipoServicio === 'pipas') {
-        try {
-          const calc = typeof p.calculoPipas === 'string' ? JSON.parse(p.calculoPipas) : p.calculoPipas;
-          if (calc) c.litros += Array.isArray(calc) ? calc.reduce((s, cg) => s + (parseFloat(cg.cantidadLitros) || 0), 0) : (parseFloat(calc.cantidadLitros) || 0);
-        } catch(e) {}
-      } else {
-        for (const pp of p.productosPedido || []) {
-          if (pp.producto?.categoria?.codigo !== 'cilindros') continue;
-          const kg = parseFloat(pp.producto?.cantidadKilos) || 0;
-          const cant = parseInt(pp.cantidad) || 0;
-          if (kg === 10) c.cil10 += cant;
-          else if (kg === 20) c.cil20 += cant;
-          else if (kg === 30) c.cil30 += cant;
-        }
-      }
-    }
-
-    const ranking = Object.values(mapa)
-      .sort((a, b) => b.totalCompras - a.totalCompras)
-      .slice(0, 10)
-      .map(c => ({ ...c, ticketPromedio: c.visitas > 0 ? Math.round(c.totalCompras / c.visitas) : 0 }));
-
-    const todos = Object.values(mapa);
-    const kpis = {
-      clientesActivos: todos.length,
-      ticketPromedio: todos.length > 0 ? Math.round(todos.reduce((s, c) => s + c.ticketPromedio, 0) / todos.length) : 0,
-      frecuentes: todos.filter(c => c.visitas >= 2).length,
-      litrosTotales: Math.round(todos.reduce((s, c) => s + c.litros, 0) * 10) / 10
-    };
-
-    res.json({ ranking, kpis });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-exports.getHistorialCliente = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { prisma } = require('../../config/database');
-
-    const pedidos = await prisma.pedido.findMany({
-      where: { clienteId: id, estado: 'entregado' },
-      orderBy: { fechaPedido: 'desc' },
-      take: 50,
-      select: {
-        id: true, numeroPedido: true, fechaPedido: true, horaPedido: true,
-        ventaTotal: true, tipoServicio: true, calculoPipas: true,
-        ruta: { select: { nombre: true } },
-        repartidor: { select: { nombres: true, apellidoPaterno: true } },
-        productosPedido: { select: { cantidad: true, producto: { select: { nombre: true, cantidadKilos: true, categoria: { select: { codigo: true } } } } } }
-      }
-    });
-
-    const totalHistorico = pedidos.reduce((s, p) => s + (parseFloat(p.ventaTotal) || 0), 0);
-    const ticketPromedio = pedidos.length > 0 ? Math.round(totalHistorico / pedidos.length) : 0;
-    let frecuenciaDias = null;
-    if (pedidos.length >= 2) {
-      const fechas = pedidos.map(p => new Date(p.fechaPedido)).sort((a, b) => a - b);
-      let totalDias = 0;
-      for (let i = 1; i < fechas.length; i++) totalDias += (fechas[i] - fechas[i-1]) / 86400000;
-      frecuenciaDias = (totalDias / (fechas.length - 1)).toFixed(1);
-    }
-
-    res.json({ totalHistorico, ticketPromedio, frecuenciaDias, totalVisitas: pedidos.length, pedidos });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
