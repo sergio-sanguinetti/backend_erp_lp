@@ -851,3 +851,76 @@ exports.getClientesByRutasPaginated = async (rutaIds, opts = {}) => {
 
     return { total, clientes: clientesNormalizados };
 };
+
+exports.getDuplicados = async () => {
+    // Buscar clientes activos
+    const clientes = await prisma.cliente.findMany({
+        where: { estadoCliente: 'activo' },
+        select: {
+            id: true,
+            nombre: true,
+            apellidoPaterno: true,
+            apellidoMaterno: true,
+            email: true,
+            telefono: true,
+            calle: true,
+            numeroExterior: true,
+            ruta: { select: { nombre: true, sede: { select: { nombre: true } } } },
+            saldoActual: true
+        }
+    });
+
+    const grupos = {};
+    for (const c of clientes) {
+        const key = `${(c.nombre || '').trim().toLowerCase()}|${(c.apellidoPaterno || '').trim().toLowerCase()}|${(c.apellidoMaterno || '').trim().toLowerCase()}`;
+        if (!key || key === '||') continue;
+        if (!grupos[key]) grupos[key] = [];
+        grupos[key].push(c);
+    }
+
+    const duplicados = Object.values(grupos).filter(g => g.length > 1);
+    return duplicados;
+};
+
+exports.unificarClientes = async (principalId, secundariosIds) => {
+    return await prisma.$transaction(async (tx) => {
+        const principal = await tx.cliente.findUnique({ where: { id: principalId } });
+        if (!principal) throw new Error("Cliente principal no encontrado");
+
+        for (const id of secundariosIds) {
+            if (id === principalId) continue;
+            const secundario = await tx.cliente.findUnique({ where: { id } });
+            if (!secundario) continue;
+
+            // Reasignar domicilios
+            await tx.domicilio.updateMany({ where: { clienteId: id }, data: { clienteId: principalId } });
+            
+            // Reasignar pedidos
+            await tx.pedido.updateMany({ where: { clienteId: id }, data: { clienteId: principalId } });
+            
+            // Reasignar pagos
+            await tx.pago.updateMany({ where: { clienteId: id }, data: { clienteId: principalId } });
+            
+            // Reasignar notas de credito
+            await tx.notaCredito.updateMany({ where: { clienteId: id }, data: { clienteId: principalId } });
+            
+            // Reasignar abonos
+            await tx.abonoCliente.updateMany({ where: { clienteId: id }, data: { clienteId: principalId } });
+            
+            // Reasignar historial credito
+            await tx.historialLimiteCredito.updateMany({ where: { clienteId: id }, data: { clienteId: principalId } });
+
+            // Traspasar el saldo actual
+            if (secundario.saldoActual > 0 || secundario.saldoActual < 0) {
+               await tx.cliente.update({
+                   where: { id: principalId },
+                   data: { saldoActual: { increment: secundario.saldoActual } }
+               });
+            }
+
+            // Eliminar el secundario
+            await tx.cliente.delete({ where: { id } });
+        }
+        return { success: true };
+    });
+};

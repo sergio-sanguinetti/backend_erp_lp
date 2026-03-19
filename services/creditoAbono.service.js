@@ -341,6 +341,18 @@ exports.createPago = async (pagoData) => {
     const formasPagoArray = Array.isArray(pagoData.formasPago)
       ? pagoData.formasPago
       : (pagoData.formasPago && pagoData.formasPago.items) || [];
+    
+    // First remove any existing 'por_cobrar' payment to prevent duplication
+    const existingPagos = await prisma.pagoPedido.findMany({
+      where: { pedidoId: pagoData.pedidoId },
+      include: { metodo: true }
+    });
+    for (const pa of existingPagos) {
+      if (pa.tipo === 'por_cobrar' || (pa.metodo && pa.metodo.tipo === 'por_cobrar')) {
+        await prisma.pagoPedido.delete({ where: { id: pa.id } });
+      }
+    }
+
     if (formasPagoArray.length > 0) {
       console.log('Procesando formas de pago para pedido:', pagoData.pedidoId);
       for (const fp of formasPagoArray) {

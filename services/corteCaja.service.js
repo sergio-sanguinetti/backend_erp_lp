@@ -4,7 +4,7 @@ const { getTodayBoundsMexico, getMexicoCityDayBounds } = require('../utils/timez
 
 /** Agrupa montos por tipo de forma de pago (efectivo, transferencia, tarjeta, etc.) */
 function agruparFormasPagoPedidos(pedidos) {
-  const resumen = { efectivo: 0, transferencia: 0, tarjeta: 0, cheque: 0, credito: 0, deposito: 0, otros: 0 };
+  const resumen = { efectivo: 0, transferencia: 0, tarjeta: 0, cheque: 0, credito: 0, deposito: 0, por_cobrar: 0, otros: 0 };
   pedidos.forEach(p => {
     if (!p.formasPago) return;
     try {
@@ -17,8 +17,8 @@ function agruparFormasPagoPedidos(pedidos) {
         else if (tipo.includes('transferencia')) resumen.transferencia += monto;
         else if (tipo.includes('tarjeta') || tipo.includes('terminal')) resumen.tarjeta += monto;
         else if (tipo.includes('cheque')) resumen.cheque += monto;
-        else if (tipo.includes('credito')) resumen.credito += monto;
         else if (tipo.includes('deposito') || tipo.includes('depósito')) resumen.deposito += monto;
+        else if (tipo.includes('por_cobrar') || tipo.includes('por cobrar')) resumen.por_cobrar += monto;
         else resumen.otros += monto;
       });
     } catch (e) {
@@ -30,7 +30,7 @@ function agruparFormasPagoPedidos(pedidos) {
 
 /** Agrupa montos de abonos por tipo de forma de pago según nombre de FormaPago */
 function agruparFormasPagoAbonos(abonos) {
-  const resumen = { efectivo: 0, transferencia: 0, tarjeta: 0, cheque: 0, credito: 0, deposito: 0, otros: 0 };
+  const resumen = { efectivo: 0, transferencia: 0, tarjeta: 0, cheque: 0, credito: 0, deposito: 0, por_cobrar: 0, otros: 0 };
   abonos.forEach(a => {
     const tipo = (a.formaPago?.nombre || '').toLowerCase();
     const monto = parseFloat(a.monto || 0);
@@ -38,8 +38,8 @@ function agruparFormasPagoAbonos(abonos) {
     else if (tipo.includes('transferencia')) resumen.transferencia += monto;
     else if (tipo.includes('tarjeta') || tipo.includes('terminal')) resumen.tarjeta += monto;
     else if (tipo.includes('cheque')) resumen.cheque += monto;
-    else if (tipo.includes('credito')) resumen.credito += monto;
     else if (tipo.includes('deposito') || tipo.includes('depósito')) resumen.deposito += monto;
+    else if (tipo.includes('por_cobrar') || tipo.includes('por cobrar')) resumen.por_cobrar += monto;
     else resumen.otros += monto;
   });
   return resumen;
@@ -103,7 +103,7 @@ class CorteCajaService {
 
     function getTipoFromItem(f) {
       const rawTipo = (f.tipo || '').toLowerCase();
-      if (rawTipo.includes('efectivo') || rawTipo.includes('credito') || rawTipo.includes('transferencia') || rawTipo.includes('cheque') || rawTipo.includes('tarjeta') || rawTipo.includes('terminal')) return rawTipo;
+      if (rawTipo.includes('efectivo') || rawTipo.includes('credito') || rawTipo.includes('transferencia') || rawTipo.includes('cheque') || rawTipo.includes('tarjeta') || rawTipo.includes('terminal') || rawTipo.includes('por_cobrar') || rawTipo.includes('por cobrar')) return rawTipo;
       const resolved = formaPagoMap[f.formaPagoId];
       if (resolved) return resolved.tipo || resolved.nombre || '';
       return (f.nombre || '').toLowerCase();
@@ -120,6 +120,7 @@ class CorteCajaService {
       tarjeta: 0,
       cheque: 0,
       credito: 0,
+      por_cobrar: 0,
       otros: 0
     };
 
@@ -140,6 +141,9 @@ class CorteCajaService {
             else if (tipo.includes('deposito') || tipo.includes('depósito')) {
               stats.deposito = (stats.deposito || 0) + monto;
             }
+            else if (tipo.includes('por_cobrar') || tipo.includes('por cobrar')) {
+              stats.por_cobrar = (stats.por_cobrar || 0) + monto;
+            }
             else stats.otros += monto;
           });
         } catch (e) {
@@ -157,6 +161,9 @@ class CorteCajaService {
       else if (tipo.includes('cheque')) stats.cheque += a.monto;
       else if (tipo.includes('deposito') || tipo.includes('depósito')) {
         stats.deposito = (stats.deposito || 0) + a.monto;
+      }
+      else if (tipo.includes('por_cobrar') || tipo.includes('por cobrar')) {
+        stats.por_cobrar = (stats.por_cobrar || 0) + a.monto;
       }
       else stats.otros += a.monto;
     });
@@ -312,6 +319,7 @@ class CorteCajaService {
                     cheque: parseFloat(statsParsed.cheque) || 0,
                     credito: parseFloat(statsParsed.credito) || 0,
                     deposito: parseFloat(statsParsed.deposito) || 0,
+                    por_cobrar: parseFloat(statsParsed.por_cobrar) || 0,
                     otros: parseFloat(statsParsed.otros) || 0
                   };
                   usedStats = true;
@@ -352,7 +360,7 @@ class CorteCajaService {
 
             if (totalCalculado === 0 && corte.detalles && corte.detalles.length > 0) {
               console.log(`⚠️ [Backend] Usando DETALLES del corte como fallback para formas de pago venta (Corte ID: ${corte.id})`);
-              resumenFormasPagoVenta = { efectivo: 0, transferencia: 0, tarjeta: 0, cheque: 0, credito: 0, deposito: 0, otros: 0 };
+              resumenFormasPagoVenta = { efectivo: 0, transferencia: 0, tarjeta: 0, cheque: 0, credito: 0, deposito: 0, por_cobrar: 0, otros: 0 };
 
               corte.detalles.forEach(d => {
                 const tipoRef = (d.tipoReferencia || '').toLowerCase();
@@ -365,8 +373,8 @@ class CorteCajaService {
                 else if (tipo.includes('transferencia')) resumenFormasPagoVenta.transferencia += monto;
                 else if (tipo.includes('tarjeta') || tipo.includes('terminal')) resumenFormasPagoVenta.tarjeta += monto;
                 else if (tipo.includes('cheque')) resumenFormasPagoVenta.cheque += monto;
-                else if (tipo.includes('credito')) resumenFormasPagoVenta.credito += monto;
                 else if (tipo.includes('deposito') || tipo.includes('depósito')) resumenFormasPagoVenta.deposito += monto;
+                else if (tipo.includes('por_cobrar') || tipo.includes('por cobrar')) resumenFormasPagoVenta.por_cobrar += monto;
                 else resumenFormasPagoVenta.otros += monto;
               });
             }
@@ -398,6 +406,7 @@ class CorteCajaService {
                     cheque: parseFloat(statsParsed.cheque) || 0,
                     credito: parseFloat(statsParsed.credito) || 0,
                     deposito: parseFloat(statsParsed.deposito) || 0,
+                    por_cobrar: parseFloat(statsParsed.por_cobrar) || 0,
                     otros: parseFloat(statsParsed.otros) || 0
                   };
                   usedStatsAbono = true;
@@ -422,7 +431,7 @@ class CorteCajaService {
 
             if (totalCalculado === 0 && corte.detalles && corte.detalles.length > 0) {
               console.log(`⚠️ [Backend] Usando DETALLES del corte como fallback para formas de pago ABONO (Corte ID: ${corte.id})`);
-              resumenFormasPagoAbono = { efectivo: 0, transferencia: 0, tarjeta: 0, cheque: 0, credito: 0, deposito: 0, otros: 0 };
+              resumenFormasPagoAbono = { efectivo: 0, transferencia: 0, tarjeta: 0, cheque: 0, credito: 0, deposito: 0, por_cobrar: 0, otros: 0 };
 
               corte.detalles.forEach(d => {
                 const tipoRef = (d.tipoReferencia || '').toLowerCase();
@@ -437,6 +446,7 @@ class CorteCajaService {
                 else if (tipo.includes('cheque')) resumenFormasPagoAbono.cheque += monto;
                 else if (tipo.includes('credito')) resumenFormasPagoAbono.credito += monto;
                 else if (tipo.includes('deposito') || tipo.includes('depósito')) resumenFormasPagoAbono.deposito += monto;
+                else if (tipo.includes('por_cobrar') || tipo.includes('por cobrar')) resumenFormasPagoAbono.por_cobrar += monto;
                 else resumenFormasPagoAbono.otros += monto;
               });
             }

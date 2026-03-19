@@ -147,6 +147,34 @@ exports.deleteCliente = async (req, res, next) => {
     }
 };
 
+// Obtener clientes duplicados
+exports.getDuplicados = async (req, res, next) => {
+    try {
+        const duplicados = await clienteService.getDuplicados();
+        res.status(200).json(duplicados);
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Unificar clientes
+exports.unificarClientes = async (req, res, next) => {
+    try {
+        const { principalId, secundariosIds } = req.body;
+        if (!principalId || !secundariosIds || secundariosIds.length === 0) {
+            return res.status(400).json({ message: 'Se requiere cliente principal y al menos un cliente secundario.' });
+        }
+        const result = await clienteService.unificarClientes(principalId, secundariosIds);
+        res.status(200).json({
+            message: 'Clientes unificados exitosamente',
+            result
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+
 // ========== DOMICILIOS ==========
 // Obtener domicilios de un cliente
 exports.getDomiciliosByCliente = async (req, res, next) => {

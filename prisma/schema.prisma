@@ -502,40 +502,40 @@ model Configuracion {
 }
 
 model ConfiguracionTicket {
-  id                      String   @id @default(uuid())
-  tipoTicket              String   @default("venta") @db.VarChar(50) @map("tipo_ticket")
-  nombreEmpresa           String   @db.VarChar(255) @map("nombre_empresa")
-  razonSocial             String?  @db.VarChar(500) @map("razon_social")
-  direccion               String?  @db.VarChar(500)
-  telefono                String?  @db.VarChar(50)
-  email                   String?  @db.VarChar(255)
-  sitioWeb                String?  @db.VarChar(255) @map("sitio_web")
-  rfc                     String?  @db.VarChar(20)
-  logo                    String?  @db.Text
-  mostrarLogo             Boolean  @default(true) @map("mostrar_logo")
-  tamañoLogo              String   @default("mediano") @db.VarChar(20) @map("tamaño_logo")
-  redesSocialesFacebook   String?  @db.VarChar(255) @map("redes_sociales_facebook")
-  redesSocialesInstagram  String?  @db.VarChar(255) @map("redes_sociales_instagram")
-  redesSocialesTwitter    String?  @db.VarChar(255) @map("redes_sociales_twitter")
-  redesSocialesLinkedin   String?  @db.VarChar(255) @map("redes_sociales_linkedin")
-  redesSocialesWhatsapp   String?  @db.VarChar(255) @map("redes_sociales_whatsapp")
-  mostrarRedesSociales    Boolean  @default(true) @map("mostrar_redes_sociales")
-  textoEncabezado         String?  @db.VarChar(500) @map("texto_encabezado")
-  textoPiePagina          String?  @db.VarChar(500) @map("texto_pie_pagina")
-  mensajeEspecial         String?  @db.VarChar(1000) @map("mensaje_especial")
-  mostrarMensajeEspecial   Boolean  @default(false) @map("mostrar_mensaje_especial")
-  mostrarFecha            Boolean  @default(true) @map("mostrar_fecha")
-  mostrarHora             Boolean  @default(true) @map("mostrar_hora")
-  mostrarCajero           Boolean  @default(true) @map("mostrar_cajero")
-  mostrarCliente           Boolean  @default(true) @map("mostrar_cliente")
-  colorPrincipal           String   @default("#1976d2") @db.VarChar(20) @map("color_principal")
-  alineacion               String   @default("centro") @db.VarChar(20)
-  urlQR                    String?  @map("url_qr") @db.VarChar(500)
-  activo                   Boolean  @default(true)
-  fechaCreacion            DateTime @default(now()) @map("fecha_creacion")
-  fechaModificacion        DateTime @updatedAt @map("fecha_modificacion")
-  createdAt                DateTime @default(now()) @map("created_at")
-  updatedAt                DateTime @updatedAt @map("updated_at")
+  id                     String   @id @default(uuid())
+  tipoTicket             String   @default("venta") @map("tipo_ticket") @db.VarChar(50)
+  nombreEmpresa          String   @map("nombre_empresa") @db.VarChar(255)
+  razonSocial            String?  @map("razon_social") @db.VarChar(500)
+  direccion              String?  @db.VarChar(500)
+  telefono               String?  @db.VarChar(50)
+  email                  String?  @db.VarChar(255)
+  sitioWeb               String?  @map("sitio_web") @db.VarChar(255)
+  rfc                    String?  @db.VarChar(20)
+  logo                   String?  @db.Text
+  mostrarLogo            Boolean  @default(true) @map("mostrar_logo")
+  tamañoLogo            String   @default("mediano") @map("tamaño_logo") @db.VarChar(20)
+  redesSocialesFacebook  String?  @map("redes_sociales_facebook") @db.VarChar(255)
+  redesSocialesInstagram String?  @map("redes_sociales_instagram") @db.VarChar(255)
+  redesSocialesTwitter   String?  @map("redes_sociales_twitter") @db.VarChar(255)
+  redesSocialesLinkedin  String?  @map("redes_sociales_linkedin") @db.VarChar(255)
+  redesSocialesWhatsapp  String?  @map("redes_sociales_whatsapp") @db.VarChar(255)
+  mostrarRedesSociales   Boolean  @default(true) @map("mostrar_redes_sociales")
+  textoEncabezado        String?  @map("texto_encabezado") @db.VarChar(500)
+  textoPiePagina         String?  @map("texto_pie_pagina") @db.VarChar(500)
+  mensajeEspecial        String?  @map("mensaje_especial") @db.VarChar(1000)
+  mostrarMensajeEspecial Boolean  @default(false) @map("mostrar_mensaje_especial")
+  mostrarFecha           Boolean  @default(true) @map("mostrar_fecha")
+  mostrarHora            Boolean  @default(true) @map("mostrar_hora")
+  mostrarCajero          Boolean  @default(true) @map("mostrar_cajero")
+  mostrarCliente         Boolean  @default(true) @map("mostrar_cliente")
+  colorPrincipal         String   @default("#1976d2") @map("color_principal") @db.VarChar(20)
+  alineacion             String   @default("centro") @db.VarChar(20)
+  urlQR                  String?  @map("url_qr") @db.VarChar(500)
+  activo                 Boolean  @default(true)
+  fechaCreacion          DateTime @default(now()) @map("fecha_creacion")
+  fechaModificacion      DateTime @updatedAt @map("fecha_modificacion")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
 
   @@unique([tipoTicket])
   @@map("configuracion_tickets")
@@ -576,26 +576,26 @@ model PagoPedido {
 }
 
 model CorteCaja {
-  id            String              @id @default(uuid())
-  repartidorId  String              @map("repartidor_id")
-  repartidor    Usuario             @relation(fields: [repartidorId], references: [id])
-  fecha         DateTime            @default(now())
-  tipo          TipoCorte           @map("tipo_corte")
-  totalVentas   Float               @default(0) @map("total_ventas")
-  totalAbonos   Float               @default(0) @map("total_abonos")
-  totalEfectivo Float               @default(0) @map("total_efectivo")
-  totalOtros    Float               @default(0) @map("total_otros")
-  estado        EstadoCorte         @default(pendiente)
-  observaciones String?             @db.VarChar(1000)
-  stats         String?             @db.LongText
-  dailySales    String?             @map("daily_sales") @db.LongText
-  totalLitros   Float?              @default(0) @map("total_litros")
-  totalProductosUnidades Int?       @default(0) @map("total_productos_unidades")
-  createdAt     DateTime            @default(now()) @map("created_at")
-  updatedAt     DateTime            @updatedAt @map("updated_at")
-  dia           String              @db.VarChar(10)
-  depositos     CorteCajaDeposito[]
-  detalles      CorteCajaDetalle[]
+  id                     String              @id @default(uuid())
+  repartidorId           String              @map("repartidor_id")
+  repartidor             Usuario             @relation(fields: [repartidorId], references: [id])
+  fecha                  DateTime            @default(now())
+  tipo                   TipoCorte           @map("tipo_corte")
+  totalVentas            Float               @default(0) @map("total_ventas")
+  totalAbonos            Float               @default(0) @map("total_abonos")
+  totalEfectivo          Float               @default(0) @map("total_efectivo")
+  totalOtros             Float               @default(0) @map("total_otros")
+  estado                 EstadoCorte         @default(pendiente)
+  observaciones          String?             @db.VarChar(1000)
+  stats                  String?             @db.LongText
+  dailySales             String?             @map("daily_sales") @db.LongText
+  totalLitros            Float?              @default(0) @map("total_litros")
+  totalProductosUnidades Int?                @default(0) @map("total_productos_unidades")
+  createdAt              DateTime            @default(now()) @map("created_at")
+  updatedAt              DateTime            @updatedAt @map("updated_at")
+  dia                    String              @db.VarChar(10)
+  depositos              CorteCajaDeposito[]
+  detalles               CorteCajaDetalle[]
 
   @@unique([repartidorId, dia, tipo])
   @@map("cortes_caja")
@@ -662,6 +662,7 @@ enum TipoFormaPago {
   cheque
   deposito
   credito
+  por_cobrar
 }
 
 enum EstadoCliente {

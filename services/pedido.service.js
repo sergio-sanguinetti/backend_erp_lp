@@ -536,4 +536,70 @@ exports.deletePedido = async (id) => {
     where: { id }
   });
 };
+// Cobrar un pedido "por_cobrar"
+exports.cobrarPorCobrar = async (pedidoId, formasPagoArray, hasDiscount, descuentoData) => {
+  const pedido = await prisma.pedido.findUnique({
+    where: { id: pedidoId },
+    include: {
+      pagos: {
+        include: {
+          metodo: true
+        }
+      }
+    }
+  });
 
+  if (!pedido) {
+    const error = new Error('Pedido no encontrado.');
+    error.status = 404;
+    throw error;
+  }
+
+  // Find the 'por_cobrar' PagoPedido
+  const pagoPorCobrar = pedido.pagos.find(p => p.metodo?.tipo === 'por_cobrar' || p.tipo === 'por_cobrar');
+
+  return await prisma.$transaction(async (tx) => {
+    // Delete the por_cobrar PagoPedido if it exists
+    if (pagoPorCobrar) {
+      await tx.pagoPedido.delete({
+        where: { id: pagoPorCobrar.id }
+      });
+    }
+
+    // Create the new payments
+    for (const fp of formasPagoArray) {
+      await tx.pagoPedido.create({
+        data: {
+          pedidoId: pedido.id,
+          monto: parseFloat(fp.monto),
+          folio: fp.referencia || null,
+          tipo: fp.tipo === 'credito' ? 'credito' : 'metodo_pago',
+          metodoId: fp.formaPagoId || null,
+          firmaCliente: fp.firmaCliente || null 
+        }
+      });
+    }
+
+    // Update the pedido's formasPago
+    const formasPagoToStore =
+      formasPagoArray.length > 0 || hasDiscount
+        ? {
+          items: formasPagoArray,
+          descuento: descuentoData?.descuento ?? null,
+          descuentoMonto: descuentoData?.descuentoMonto != null ? Number(descuentoData.descuentoMonto) : null,
+          discountType: descuentoData?.discountType || null,
+          discountName: descuentoData?.discountName || null
+        }
+        : null;
+
+    return await tx.pedido.update({
+      where: { id: pedidoId },
+      data: {
+        formasPago: formasPagoToStore != null ? JSON.stringify(formasPagoToStore) : null
+      },
+      include: {
+        cliente: true
+      }
+    });
+  });
+};

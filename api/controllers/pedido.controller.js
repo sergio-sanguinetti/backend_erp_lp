@@ -176,6 +176,7 @@ exports.deletePedido = async (req, res, next) => {
   }
 };
 
+<<<<<<< Updated upstream
 
 // Modificar pagos de un pedido (Oficina, Planta, Administrador)
 exports.updatePagosPedido = async (req, res) => {
@@ -246,3 +247,19 @@ exports.cancelarPedido = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+=======
+exports.cobrarPorCobrar = async (req, res, next) => {
+  try {
+    const data = req.body;
+    const result = await pedidoService.cobrarPorCobrar(data.pedidoId, data.formasPagoArray, data.hasDiscount, data.descuentoData);
+
+    res.status(200).json({
+      message: 'Venta por cobrar actualizada como cobrada exitosamente.',
+      pedido: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+>>>>>>> Stashed changes
