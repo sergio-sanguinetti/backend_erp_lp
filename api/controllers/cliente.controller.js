@@ -284,18 +284,18 @@ exports.getRanking = async (req, res, next) => {
                     ruta: pedido.ruta?.nombre || '',
                     operador: pedido.repartidor?.nombres || '',
                     visitas: 0,
-                    total: 0,
+                    totalCompras: 0,
                     litros: 0,
-                    piezas10kg: 0,
-                    piezas20kg: 0,
-                    piezas30kg: 0
+                    cil10: 0,
+                    cil20: 0,
+                    cil30: 0
                 };
             }
 
             const c = clienteMap[cId];
             c.visitas++;
             const venta = parseFloat(pedido.ventaTotal) || 0;
-            c.total += venta;
+            c.totalCompras += venta;
             totalVendidoGlobal += venta;
 
             // Actualizar ruta con la más reciente
@@ -327,16 +327,16 @@ exports.getRanking = async (req, res, next) => {
                     const kilos = pp.producto?.cantidadKilos || 0;
                     const nombre = (pp.producto?.nombre || '').toLowerCase();
                     const cant = pp.cantidad || 0;
-                    if (kilos === 10 || nombre.includes('10')) c.piezas10kg += cant;
-                    else if (kilos === 20 || nombre.includes('20')) c.piezas20kg += cant;
-                    else if (kilos === 30 || nombre.includes('30')) c.piezas30kg += cant;
+                    if (kilos === 10 || nombre.includes('10')) c.cil10 += cant;
+                    else if (kilos === 20 || nombre.includes('20')) c.cil20 += cant;
+                    else if (kilos === 30 || nombre.includes('30')) c.cil30 += cant;
                 }
             }
         }
 
         // Convertir a array y ordenar por total descendente
         const ranking = Object.values(clienteMap)
-            .sort((a, b) => b.total - a.total)
+            .sort((a, b) => b.totalCompras - a.totalCompras)
             .slice(0, 10);
 
         // KPIs
