@@ -458,6 +458,80 @@ class CorteCajaService {
           resumenFormasPagoVenta,
           resumenFormasPagoAbono
         };
+
+        // ── DESGLOSE CILINDROS ───────────────────────────────────────────────────
+        let desgloseCilindros = null;
+        if (corte.repartidor?.tipoRepartidor === 'cilindros' && corte.tipo === 'venta_dia') {
+          const pedidosConProductos = await prisma.pedido.findMany({
+            where: {
+              repartidorId: corte.repartidorId,
+              fechaPedido: { gte: start, lte: end },
+              estado: 'entregado'
+            },
+            include: {
+              productosPedido: {
+                include: {
+                  producto: { select: { cantidadKilos: true, nombre: true } }
+                }
+              }
+            }
+          });
+          const kgMap = {};
+          pedidosConProductos.forEach(p => {
+            p.productosPedido.forEach(pp => {
+              const kg = pp.producto?.cantidadKilos;
+              if (!kg) return;
+              if (!kgMap[kg]) kgMap[kg] = { kg, nombre: pp.producto.nombre, unidades: 0, monto: 0 };
+              kgMap[kg].unidades += pp.cantidad;
+              kgMap[kg].monto += parseFloat(pp.subtotal || 0);
+            });
+          });
+          desgloseCilindros = Object.values(kgMap).sort((a, b) => a.kg - b.kg);
+        }
+
+        // ── DETALLE PEDIDOS PIPAS ────────────────────────────────────────────────
+        let detallePedidos = null;
+        if (corte.repartidor?.tipoRepartidor === 'pipas' && corte.tipo === 'venta_dia') {
+          const pedidosPipas = await prisma.pedido.findMany({
+            where: {
+              repartidorId: corte.repartidorId,
+              fechaPedido: { gte: start, lte: end },
+              estado: 'entregado'
+            },
+            include: {
+              cliente: { select: { nombre: true, apellidoPaterno: true } }
+            },
+            orderBy: { fechaPedido: 'asc' }
+          });
+          detallePedidos = pedidosPipas.map((p, idx) => {
+            let fpDetalle = [];
+            if (p.formasPago) {
+              try {
+                const fp = typeof p.formasPago === 'string' ? JSON.parse(p.formasPago) : p.formasPago;
+                const items = Array.isArray(fp) ? fp : (fp?.items || []);
+                fpDetalle = items
+                  .map(f => ({ tipo: f.tipo || f.nombre || 'otro', monto: parseFloat(f.monto || 0) }))
+                  .filter(f => f.monto > 0);
+              } catch (e) { /* ignore */ }
+            }
+            return {
+              numero: idx + 1,
+              clienteNombre: p.cliente
+                ? (p.cliente.nombre + ' ' + (p.cliente.apellidoPaterno || '')).trim()
+                : 'Sin nombre',
+              monto: p.ventaTotal,
+              formasPago: fpDetalle
+            };
+          });
+        }
+
+        return {
+          ...corte,
+          resumenFormasPagoVenta,
+          resumenFormasPagoAbono,
+          desgloseCilindros,
+          detallePedidos
+        };
       })
     );
 
