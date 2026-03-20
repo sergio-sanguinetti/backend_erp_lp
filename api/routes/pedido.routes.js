@@ -10,7 +10,6 @@ router.get('/:id', protect, pedidoController.getPedidoById);
 
 // Rutas protegidas (solo administradores)
 router.post('/', protect, pedidoController.createPedido);
-router.post('/cobrar-por-cobrar', protect, pedidoController.cobrarPorCobrar);
 router.put('/:id', protect, pedidoController.updatePedido);
 router.delete('/:id', protect, pedidoController.deletePedido);
 

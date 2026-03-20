@@ -33,12 +33,9 @@ const upload = multer({
 // Rutas de clientes (by-rutas y buscar-por-qr antes de :id para que no se interpreten como id)
 router.get('/by-rutas', clienteController.getClientesByRutasPaginated);
 router.get('/buscar-por-qr', clienteController.buscarPorQR);
-<<<<<<< Updated upstream
 router.get('/ranking', protect, clienteController.getRanking);
-=======
 router.get('/duplicados', protect, clienteController.getDuplicados);
 router.post('/unificar', protect, clienteController.unificarClientes);
->>>>>>> Stashed changes
 router.get('/', clienteController.getAllClientes);
 router.get('/:id/historial', protect, clienteController.getHistorialCliente);
 router.get('/:id', clienteController.getClienteById);
