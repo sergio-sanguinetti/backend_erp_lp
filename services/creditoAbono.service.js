@@ -762,22 +762,24 @@ exports.getPagoById = async (id) => {
   });
 };
 
-exports.updatePagoEstado = async (id, estado, usuarioAutorizacion) => {
+exports.updatePagoEstado = async (id, estado, usuarioAutorizacion, notaAutorizacion, nombreUsuario) => {
   const pago = await prisma.pago.findUnique({
     where: { id },
-    include: {
-      notaCredito: true
-    }
+    include: { notaCredito: true }
   });
-
-  if (!pago) {
-    throw new Error('Pago no encontrado.');
+  if (!pago) throw new Error("Pago no encontrado.");
+  const ahora = new Date();
+  const data = { estado };
+  if (estado === "en_revision") {
+    data.revisadoPor = nombreUsuario || usuarioAutorizacion || null;
+    data.fechaRevision = ahora;
   }
-
-  const data = {
-    estado,
-    usuarioAutorizacion: usuarioAutorizacion || null
-  };
+  if (estado === "autorizado") {
+    data.usuarioAutorizacion = usuarioAutorizacion || null;
+    data.autorizadoPorNombre = nombreUsuario || null;
+    data.fechaAutorizacionReal = ahora;
+  }
+  if (notaAutorizacion) data.notaAutorizacion = notaAutorizacion;
 
   const pagoActualizado = await prisma.pago.update({
     where: { id },
@@ -909,21 +911,27 @@ exports.getResumenCartera = async (filtros = {}) => {
   if (Object.keys(clienteWhere).length > 0) {
     where.cliente = { ...where.cliente, ...clienteWhere };
   }
-
   const notas = await prisma.notaCredito.findMany({
     where
   });
-
-  const carteraTotal = notas.reduce((sum, nota) => sum + nota.saldoPendiente, 0);
-  const notasPendientes = notas.length;
-  const carteraVencida = notas
-    .filter(nota => nota.estado === 'vencida')
-    .reduce((sum, nota) => sum + nota.saldoPendiente, 0);
-  const notasVencidas = notas.filter(nota => nota.estado === 'vencida').length;
-  const carteraPorVencer = notas
-    .filter(nota => nota.estado === 'por_vencer')
-    .reduce((sum, nota) => sum + nota.saldoPendiente, 0);
-  const notasPorVencer = notas.filter(nota => nota.estado === 'por_vencer').length;
+  const ahora = new Date();
+  const DIAS_ALERTA = 5;
+  const notasConEstado = notas.map(nota => {
+    let estadoReal = "vigente";
+    if (nota.fechaVencimiento) {
+      const fv = new Date(nota.fechaVencimiento);
+      const diasRestantes = (fv - ahora) / (1000 * 60 * 60 * 24);
+      if (diasRestantes < 0) estadoReal = "vencida";
+      else if (diasRestantes <= DIAS_ALERTA) estadoReal = "por_vencer";
+    }
+    return { ...nota, estadoReal };
+  });
+  const carteraTotal = notasConEstado.reduce((sum, n) => sum + n.saldoPendiente, 0);
+  const notasPendientes = notasConEstado.length;
+  const carteraVencida = notasConEstado.filter(n => n.estadoReal === "vencida").reduce((sum, n) => sum + n.saldoPendiente, 0);
+  const notasVencidas = notasConEstado.filter(n => n.estadoReal === "vencida").length;
+  const carteraPorVencer = notasConEstado.filter(n => n.estadoReal === "por_vencer").reduce((sum, n) => sum + n.saldoPendiente, 0);
+  const notasPorVencer = notasConEstado.filter(n => n.estadoReal === "por_vencer").length;
 
   return {
     carteraTotal,

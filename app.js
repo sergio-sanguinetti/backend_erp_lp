@@ -124,6 +124,7 @@ app.use('/api/reportes', reporteRoutes);
 app.use('/api/reportes-financieros', reporteFinancieroRoutes);
 app.use('/api/cortes-caja', corteCajaRoutes);
 app.use('/api/ventas', ventasRoutes);
+app.use('/api/sbc', require('./api/routes/sbc.routes'));
 
 // Middleware para manejar rutas no encontradas (404)
 app.use((req, res, next) => {

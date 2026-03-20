@@ -475,3 +475,58 @@ exports.importarClientesMasivo = async (req, res, next) => {
     }
 };
 
+
+
+// ========== FUSIONAR CLIENTES ==========
+exports.fusionarClientes = async (req, res) => {
+  const { principalId, secundarioId } = req.body
+  const ROLES = ['superAdministrador', 'administrador', 'oficina', 'planta']
+  if (!req.user || !ROLES.includes(req.user.rol)) {
+    return res.status(403).json({ message: 'No tienes permiso para fusionar clientes.' })
+  }
+  if (!principalId || !secundarioId) {
+    return res.status(400).json({ message: 'Se requieren principalId y secundarioId.' })
+  }
+  if (principalId === secundarioId) {
+    return res.status(400).json({ message: 'Los clientes deben ser diferentes.' })
+  }
+  try {
+    const { prisma } = require('../../config/database')
+    // Verificar que existan
+    const [principal, secundario] = await Promise.all([
+      prisma.cliente.findUnique({ where: { id: principalId } }),
+      prisma.cliente.findUnique({ where: { id: secundarioId } })
+    ])
+    if (!principal) return res.status(404).json({ message: 'Cliente principal no encontrado.' })
+    if (!secundario) return res.status(404).json({ message: 'Cliente secundario no encontrado.' })
+
+    // Fusionar todo en una transacción
+    await prisma.$transaction([
+      // Reasignar pedidos
+      prisma.pedido.updateMany({ where: { clienteId: secundarioId }, data: { clienteId: principalId } }),
+      // Reasignar notas de crédito
+      prisma.notaCredito.updateMany({ where: { clienteId: secundarioId }, data: { clienteId: principalId } }),
+      // Reasignar pagos
+      prisma.pago.updateMany({ where: { clienteId: secundarioId }, data: { clienteId: principalId } }),
+      // Reasignar abonos
+      prisma.abonoCliente.updateMany({ where: { clienteId: secundarioId }, data: { clienteId: principalId } }),
+      // Reasignar historial de límites
+      prisma.historialLimiteCredito.updateMany({ where: { clienteId: secundarioId }, data: { clienteId: principalId } }),
+      // Actualizar saldoActual del principal sumando el del secundario
+      prisma.cliente.update({
+        where: { id: principalId },
+        data: {
+          saldoActual: { increment: secundario.saldoActual },
+          limiteCredito: Math.max(principal.limiteCredito, secundario.limiteCredito)
+        }
+      }),
+      // Eliminar cliente secundario (domicilios se eliminan por cascade)
+      prisma.cliente.delete({ where: { id: secundarioId } })
+    ])
+
+    res.json({ message: 'Clientes fusionados correctamente.', principalId })
+  } catch (e) {
+    console.error('Error fusionando clientes:', e)
+    res.status(500).json({ message: e.message })
+  }
+}

@@ -328,6 +328,10 @@ model Pedido {
   calculoPipas      String?          @map("calculo_pipas") @db.LongText
   formasPago        String?          @map("formas_pago") @db.LongText
   montoPagado       Float            @default(0) @map("monto_pagado")
+  estadoSBC         String?          @map("estado_sbc") @db.VarChar(50)
+  fechaConfirmacionSBC DateTime?      @map("fecha_confirmacion_sbc")
+  usuarioConfirmacionSBC String?      @map("usuario_confirmacion_sbc") @db.VarChar(255)
+  observacionesSBC  String?          @map("observaciones_sbc") @db.VarChar(1000)
   notasCredito      NotaCredito[]
   pagos             PagoPedido[]
   productosPedido   PedidoProducto[]
@@ -400,6 +404,11 @@ model Pago {
   usuarioRegistro     String          @map("usuario_registro")
   usuarioAutorizacion String?         @map("usuario_autorizacion")
   estado              EstadoPago      @default(pendiente)
+  revisadoPor         String?         @map("revisado_por")
+  fechaRevision       DateTime?       @map("fecha_revision")
+  autorizadoPorNombre String?         @map("autorizado_por_nombre")
+  fechaAutorizacionReal DateTime?     @map("fecha_autorizacion_real")
+  notaAutorizacion    String?         @map("nota_autorizacion") @db.VarChar(500)
   fechaCreacion       DateTime        @default(now()) @map("fecha_creacion")
   fechaModificacion   DateTime        @updatedAt @map("fecha_modificacion")
   createdAt           DateTime        @default(now()) @map("created_at")
@@ -566,7 +575,14 @@ model PagoPedido {
   tipo         TipoPagoPedido
   metodoId     String?        @map("metodo_id")
   fecha        DateTime       @default(now())
-  firmaCliente String?        @map("firma_cliente") @db.Text
+  firmaCliente          String?      @map("firma_cliente") @db.Text
+  estadoSbc             EstadoSbc?   @map("estado_sbc")
+  folioConfirmado       String?      @map("folio_confirmado") @db.VarChar(255)
+  notaConfirmacion      String?      @map("nota_confirmacion") @db.VarChar(500)
+  confirmadoPorOficina  String?      @map("confirmado_por_oficina")
+  fechaConfOficina      DateTime?    @map("fecha_conf_oficina")
+  confirmadoPorSanLuis  String?      @map("confirmado_por_san_luis")
+  fechaConfSanLuis      DateTime?    @map("fecha_conf_san_luis")
   pedido       Pedido         @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
   metodo       FormaPago?     @relation(fields: [metodoId], references: [id], onDelete: SetNull)
 
@@ -700,6 +716,7 @@ enum EstadoNotaCredito {
 
 enum EstadoPago {
   pendiente
+  en_revision
   autorizado
   rechazado
   cancelado
@@ -740,4 +757,11 @@ enum EstadoCorte {
 enum TipoReferenciaCorte {
   pedido
   abono
+}
+
+enum EstadoSbc {
+  pendiente
+  confirmado_oficina
+  confirmado_sanluis
+  rechazado
 }

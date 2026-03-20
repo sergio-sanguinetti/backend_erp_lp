@@ -171,7 +171,7 @@ exports.createPago = async (req, res, next) => {
       observaciones: req.body.observaciones,
       usuarioRegistro: req.body.usuarioRegistro || req.user.id,
       usuarioAutorizacion: req.body.usuarioAutorizacion,
-      estado: req.body.estado || 'pendiente',
+      estado: req.body.estado || (['superAdministrador','administrador','oficina','planta'].includes(req.user.rol) ? 'en_revision' : 'pendiente'),
       formasPago: req.body.formasPago,
       firmaCliente: req.body.firmaCliente || null,
       // Vigencia de pago para crédito: días o fecha (usado al crear la nota de crédito)
@@ -198,22 +198,19 @@ exports.createPago = async (req, res, next) => {
 exports.updatePagoEstado = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { estado } = req.body;
-
-    const pago = await creditoAbonoService.updatePagoEstado(
-      id,
-      estado,
-      req.user.id
-    );
-
-    if (!pago) {
-      return res.status(404).json({ message: 'Pago no encontrado.' });
+    const { estado, notaAutorizacion } = req.body;
+    const ROLES_OFICINA = ["superAdministrador", "administrador", "oficina", "planta"];
+    const ROLES_ADMIN = ["superAdministrador", "administrador"];
+    if (estado === "autorizado" && !ROLES_ADMIN.includes(req.user.rol)) {
+      return res.status(403).json({ message: "Solo Administrador puede autorizar pagos." });
     }
-
-    res.status(200).json({
-      message: 'Estado del pago actualizado exitosamente.',
-      pago
-    });
+    if (["en_revision","rechazado"].includes(estado) && !ROLES_OFICINA.includes(req.user.rol)) {
+      return res.status(403).json({ message: "No tienes permiso para esta accion." });
+    }
+    const nombreUsuario = req.user.nombres ? req.user.nombres + " " + (req.user.apellidoPaterno || "") : req.user.id;
+    const pago = await creditoAbonoService.updatePagoEstado(id, estado, req.user.id, notaAutorizacion, nombreUsuario.trim());
+    if (!pago) return res.status(404).json({ message: "Pago no encontrado." });
+    res.status(200).json({ message: "Estado del pago actualizado.", pago });
   } catch (error) {
     next(error);
   }
@@ -382,19 +379,23 @@ async function calcularDiasPromedioPago(clienteId) {
 }
 
 function determinarEstadoCliente(cliente, notas) {
-  if (cliente.saldoActual > cliente.limiteCredito) {
-    return 'critico';
-  }
 
-  const tieneVencidas = notas.some(n => n.estado === 'vencida');
+  const ahora = new Date();
+  const DIAS_ALERTA = 5;
+  const tieneVencidas = notas.some(n => {
+    if (!n.fechaVencimiento) return false;
+    return new Date(n.fechaVencimiento) < ahora;
+  });
   if (tieneVencidas) {
-    return 'vencido';
+    return "vencido";
   }
-
-  if (cliente.saldoActual > cliente.limiteCredito * 0.8) {
-    return 'critico';
-  }
-
-  return 'buen-pagador';
+  const tienePorVencer = notas.some(n => {
+    if (!n.fechaVencimiento) return false;
+    const dias = (new Date(n.fechaVencimiento) - ahora) / (1000*60*60*24);
+    return dias >= 0 && dias <= DIAS_ALERTA;
+  });
+  if (cliente.saldoActual > cliente.limiteCredito) return "critico";
+  if (tienePorVencer) return "por_vencer";
+  return "buen-pagador";
 }
 

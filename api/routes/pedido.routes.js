@@ -4,6 +4,7 @@ const pedidoController = require('../controllers/pedido.controller');
 const { protect } = require('../middlewares/auth.middleware');
 
 // Rutas públicas (para obtener pedidos)
+router.get('/sbc/pendientes', protect, pedidoController.getPedidosSBC);
 router.get('/', protect, pedidoController.getAllPedidos);
 router.get('/:id', protect, pedidoController.getPedidoById);
 
@@ -15,5 +16,10 @@ router.delete('/:id', protect, pedidoController.deletePedido);
 
 router.put('/:id/pagos', protect, pedidoController.updatePagosPedido);
 router.put('/:id/cancelar', protect, pedidoController.cancelarPedido);
-module.exports = router;
 
+
+
+// Rutas SBC (Salvo Buen Cobro)
+router.put('/:id/sbc', protect, pedidoController.updateEstadoSBC);
+
+module.exports = router;

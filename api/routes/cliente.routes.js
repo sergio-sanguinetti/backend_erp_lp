@@ -40,10 +40,8 @@ router.get('/duplicados', protect, clienteController.getDuplicados);
 router.post('/unificar', protect, clienteController.unificarClientes);
 >>>>>>> Stashed changes
 router.get('/', clienteController.getAllClientes);
-router.get('/ranking', protect, clienteController.getRanking);
 router.get('/:id/historial', protect, clienteController.getHistorialCliente);
 router.get('/:id', clienteController.getClienteById);
-router.get('/:id/historial', protect, clienteController.getHistorialCliente);
 router.post('/', protect, clienteController.createCliente);
 router.post('/importar-masivo', protect, upload.single('archivo'), clienteController.importarClientesMasivo);
 router.put('/:id', protect, clienteController.updateCliente);
@@ -55,5 +53,6 @@ router.post('/:clienteId/domicilios', protect, clienteController.createDomicilio
 router.put('/domicilios/:id', protect, clienteController.updateDomicilio);
 router.delete('/domicilios/:id', protect, clienteController.deleteDomicilio);
 
+router.post('/fusionar', protect, clienteController.fusionarClientes)
 module.exports = router;
 

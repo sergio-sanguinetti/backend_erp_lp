@@ -176,7 +176,6 @@ exports.deletePedido = async (req, res, next) => {
   }
 };
 
-<<<<<<< Updated upstream
 
 // Modificar pagos de un pedido (Oficina, Planta, Administrador)
 exports.updatePagosPedido = async (req, res) => {
@@ -247,19 +246,261 @@ exports.cancelarPedido = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-=======
-exports.cobrarPorCobrar = async (req, res, next) => {
-  try {
-    const data = req.body;
-    const result = await pedidoService.cobrarPorCobrar(data.pedidoId, data.formasPagoArray, data.hasDiscount, data.descuentoData);
 
-    res.status(200).json({
-      message: 'Venta por cobrar actualizada como cobrada exitosamente.',
-      pedido: result
+// ========== MÓDULO SBC (Salvo Buen Cobro) ==========
+
+// Obtener pedidos con pago SBC pendiente de confirmación
+exports.getPedidosSBC = async (req, res) => {
+  try {
+    const { prisma } = require('../../config/database');
+    const { sedeId, rutaId, fechaDesde, fechaHasta } = req.query;
+
+    const where = {
+      estadoSBC: 'pendiente_confirmacion',
+      estado: 'entregado'
+    };
+
+    if (sedeId) where.sedeId = sedeId;
+    if (rutaId) where.rutaId = rutaId;
+    if (fechaDesde || fechaHasta) {
+      where.fechaPedido = {};
+      if (fechaDesde) where.fechaPedido.gte = new Date(fechaDesde);
+      if (fechaHasta) where.fechaPedido.lte = new Date(fechaHasta + 'T23:59:59');
+    }
+
+    const pedidos = await prisma.pedido.findMany({
+      where,
+      include: {
+        cliente: { select: { id: true, nombre: true, apellidoPaterno: true, apellidoMaterno: true, telefono: true } },
+        ruta: { select: { id: true, nombre: true } },
+        repartidor: { select: { id: true, nombres: true, apellidoPaterno: true } },
+        sede: { select: { id: true, nombre: true } }
+      },
+      orderBy: { fechaPedido: 'asc' }
     });
+
+    const hoy = new Date();
+    const resultado = pedidos.map(p => {
+      const fechaPedido = new Date(p.fechaPedido);
+      const diasPendiente = Math.floor((hoy - fechaPedido) / (1000 * 60 * 60 * 24));
+      const formasPago = p.formasPago ? JSON.parse(p.formasPago) : null;
+      return {
+        id: p.id,
+        numeroPedido: p.numeroPedido,
+        cliente: p.cliente ? `${p.cliente.nombre} ${p.cliente.apellidoPaterno} ${p.cliente.apellidoMaterno || ''}`.trim() : 'Sin cliente',
+        clienteId: p.clienteId,
+        ruta: p.ruta?.nombre || 'Sin ruta',
+        repartidor: p.repartidor ? `${p.repartidor.nombres} ${p.repartidor.apellidoPaterno}` : 'Sin repartidor',
+        sede: p.sede?.nombre || 'Sin sede',
+        ventaTotal: p.ventaTotal,
+        tipoServicio: p.tipoServicio,
+        fechaPedido: p.fechaPedido,
+        diasPendiente,
+        urgente: diasPendiente >= 3,
+        formasPago,
+        observacionesSBC: p.observacionesSBC
+      };
+    });
+
+    res.json({ pedidos: resultado, total: resultado.length });
   } catch (error) {
-    next(error);
+    console.error('Error getPedidosSBC:', error);
+    res.status(500).json({ message: error.message });
   }
 };
 
->>>>>>> Stashed changes
+// Confirmar o rechazar un pago SBC
+exports.updateEstadoSBC = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { estadoSBC, observacionesSBC } = req.body;
+    const rol = req.user?.rol;
+
+    const rolesPermitidos = ['superAdministrador', 'administrador', 'oficina', 'planta'];
+    if (!rolesPermitidos.includes(rol)) {
+      return res.status(403).json({ message: 'No tienes permiso para confirmar pagos SBC' });
+    }
+
+    if (!['confirmado', 'rechazado'].includes(estadoSBC)) {
+      return res.status(400).json({ message: 'Estado SBC inválido. Use: confirmado o rechazado' });
+    }
+
+    const { prisma } = require('../../config/database');
+
+    const pedido = await prisma.pedido.update({
+      where: { id },
+      data: {
+        estadoSBC,
+        fechaConfirmacionSBC: new Date(),
+        usuarioConfirmacionSBC: req.user.nombres || req.user.email,
+        observacionesSBC: observacionesSBC || null
+      }
+    });
+
+    res.json({ message: `Pago SBC ${estadoSBC} exitosamente`, pedido });
+  } catch (error) {
+    console.error('Error updateEstadoSBC:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ========== MÓDULO SBC (Salvo Buen Cobro) ==========
+
+exports.getPedidosSBC = async (req, res) => {
+  try {
+    const { prisma } = require('../../config/database');
+    const { sedeId, rutaId, fechaDesde, fechaHasta } = req.query;
+    const where = { estadoSBC: 'pendiente_confirmacion', estado: 'entregado' };
+    if (sedeId) where.sedeId = sedeId;
+    if (rutaId) where.rutaId = rutaId;
+    if (fechaDesde || fechaHasta) {
+      where.fechaPedido = {};
+      if (fechaDesde) where.fechaPedido.gte = new Date(fechaDesde);
+      if (fechaHasta) where.fechaPedido.lte = new Date(fechaHasta + 'T23:59:59');
+    }
+    const pedidos = await prisma.pedido.findMany({
+      where,
+      include: {
+        cliente: { select: { id: true, nombre: true, apellidoPaterno: true, apellidoMaterno: true } },
+        ruta: { select: { id: true, nombre: true } },
+        repartidor: { select: { id: true, nombres: true, apellidoPaterno: true } },
+        sede: { select: { id: true, nombre: true } }
+      },
+      orderBy: { fechaPedido: 'asc' }
+    });
+    const hoy = new Date();
+    const resultado = pedidos.map(p => {
+      const dias = Math.floor((hoy - new Date(p.fechaPedido)) / (1000 * 60 * 60 * 24));
+      return {
+        id: p.id,
+        numeroPedido: p.numeroPedido,
+        cliente: p.cliente ? `${p.cliente.nombre} ${p.cliente.apellidoPaterno}`.trim() : 'Sin cliente',
+        clienteId: p.clienteId,
+        ruta: p.ruta ? p.ruta.nombre : 'Sin ruta',
+        repartidor: p.repartidor ? `${p.repartidor.nombres} ${p.repartidor.apellidoPaterno}` : 'Sin repartidor',
+        sede: p.sede ? p.sede.nombre : 'Sin sede',
+        ventaTotal: p.ventaTotal,
+        tipoServicio: p.tipoServicio,
+        fechaPedido: p.fechaPedido,
+        diasPendiente: dias,
+        urgente: dias >= 3,
+        formasPago: p.formasPago ? JSON.parse(p.formasPago) : null,
+        observacionesSBC: p.observacionesSBC
+      };
+    });
+    res.json({ pedidos: resultado, total: resultado.length });
+  } catch (error) {
+    console.error('Error getPedidosSBC:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.updateEstadoSBC = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { estadoSBC, observacionesSBC } = req.body;
+    const rol = req.user ? req.user.rol : null;
+    const rolesPermitidos = ['superAdministrador', 'administrador', 'oficina', 'planta'];
+    if (!rolesPermitidos.includes(rol)) {
+      return res.status(403).json({ message: 'No tienes permiso para confirmar pagos SBC' });
+    }
+    if (!['confirmado', 'rechazado'].includes(estadoSBC)) {
+      return res.status(400).json({ message: 'Estado SBC invalido. Use: confirmado o rechazado' });
+    }
+    const { prisma } = require('../../config/database');
+    const pedido = await prisma.pedido.update({
+      where: { id },
+      data: {
+        estadoSBC,
+        fechaConfirmacionSBC: new Date(),
+        usuarioConfirmacionSBC: req.user.nombres || req.user.email,
+        observacionesSBC: observacionesSBC || null
+      }
+    });
+    res.json({ message: `Pago SBC ${estadoSBC} exitosamente`, pedido });
+  } catch (error) {
+    console.error('Error updateEstadoSBC:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+// ========== MÓDULO SBC (Salvo Buen Cobro) ==========
+
+exports.getPedidosSBC = async (req, res) => {
+  try {
+    const { prisma } = require("../../config/database");
+    const { sedeId, rutaId, fechaDesde, fechaHasta } = req.query;
+    const where = { estadoSBC: "pendiente_confirmacion", estado: "entregado" };
+    if (sedeId) where.sedeId = sedeId;
+    if (rutaId) where.rutaId = rutaId;
+    if (fechaDesde || fechaHasta) {
+      where.fechaPedido = {};
+      if (fechaDesde) where.fechaPedido.gte = new Date(fechaDesde);
+      if (fechaHasta) where.fechaPedido.lte = new Date(fechaHasta + "T23:59:59");
+    }
+    const pedidos = await prisma.pedido.findMany({
+      where,
+      include: {
+        cliente: { select: { id: true, nombre: true, apellidoPaterno: true, apellidoMaterno: true } },
+        ruta: { select: { id: true, nombre: true } },
+        repartidor: { select: { id: true, nombres: true, apellidoPaterno: true } },
+        sede: { select: { id: true, nombre: true } }
+      },
+      orderBy: { fechaPedido: "asc" }
+    });
+    const hoy = new Date();
+    const resultado = pedidos.map(p => {
+      const dias = Math.floor((hoy - new Date(p.fechaPedido)) / (1000 * 60 * 60 * 24));
+      return {
+        id: p.id,
+        numeroPedido: p.numeroPedido,
+        cliente: p.cliente ? (p.cliente.nombre + " " + p.cliente.apellidoPaterno).trim() : "Sin cliente",
+        clienteId: p.clienteId,
+        ruta: p.ruta ? p.ruta.nombre : "Sin ruta",
+        repartidor: p.repartidor ? (p.repartidor.nombres + " " + p.repartidor.apellidoPaterno) : "Sin repartidor",
+        sede: p.sede ? p.sede.nombre : "Sin sede",
+        ventaTotal: p.ventaTotal,
+        tipoServicio: p.tipoServicio,
+        fechaPedido: p.fechaPedido,
+        diasPendiente: dias,
+        urgente: dias >= 3,
+        formasPago: p.formasPago ? JSON.parse(p.formasPago) : null,
+        observacionesSBC: p.observacionesSBC
+      };
+    });
+    res.json({ pedidos: resultado, total: resultado.length });
+  } catch (error) {
+    console.error("Error getPedidosSBC:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.updateEstadoSBC = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { estadoSBC, observacionesSBC } = req.body;
+    const rol = req.user ? req.user.rol : null;
+    const rolesPermitidos = ["superAdministrador", "administrador", "oficina", "planta"];
+    if (!rolesPermitidos.includes(rol)) {
+      return res.status(403).json({ message: "No tienes permiso para confirmar pagos SBC" });
+    }
+    if (!["confirmado", "rechazado"].includes(estadoSBC)) {
+      return res.status(400).json({ message: "Estado SBC invalido. Use: confirmado o rechazado" });
+    }
+    const { prisma } = require("../../config/database");
+    const pedido = await prisma.pedido.update({
+      where: { id },
+      data: {
+        estadoSBC,
+        fechaConfirmacionSBC: new Date(),
+        usuarioConfirmacionSBC: req.user.nombres || req.user.email,
+        observacionesSBC: observacionesSBC || null
+      }
+    });
+    res.json({ message: "Pago SBC " + estadoSBC + " exitosamente", pedido });
+  } catch (error) {
+    console.error("Error updateEstadoSBC:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
